@@ -6,19 +6,13 @@
 
 <template>
     <div class="app-layout">
-        <nav>
-            <NuxtLink to="/home">Home</NuxtLink>
-            <NuxtLink to="/login">Login</NuxtLink>
-            <NuxtLink to="/register">Register</NuxtLink>
-        </nav>
+        <SiteHeader />
 
         <main>
             <slot />
         </main>
 
-        <footer>
-            <p>WanderBus Footer</p>
-        </footer>
+        <SiteFooter />
     </div>
 
 </template>

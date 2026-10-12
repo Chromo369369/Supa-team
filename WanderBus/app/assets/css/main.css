@@ -21,16 +21,10 @@ main {
   padding: 20px;
 }
 
-nav {
-    background-color: paleturquoise;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-
-}
 
 footer {
     background-color: grey;
     color: white;
-    text-align: center;
+    display: flex;
+    justify-content:flex-end;
 }
