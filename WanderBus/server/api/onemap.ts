@@ -1,6 +1,9 @@
 export default defineEventHandler(async(event) => {
     const config = useRuntimeConfig(event)
     const startingLocation = getQuery(event).value
+    if (!startingLocation || String(startingLocation).length < 3){
+        return []
+    }
     const location = await $fetch<{found: number,results: any[] }>('https://www.onemap.gov.sg/api/common/elastic/search',{
         query:{
             searchVal: startingLocation,
