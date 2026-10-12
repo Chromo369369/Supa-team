@@ -5,6 +5,7 @@ export default defineNuxtConfig({
   ssr:false,
   css: ['bootstrap/dist/css/bootstrap.min.css', '~/assets/css/main.css'],
   runtimeConfig: {
-    ltaAccountKey: ''
+    ltaAccountKey: '',
+    onemapToken:'',
   },
 })
