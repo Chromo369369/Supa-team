@@ -6,28 +6,34 @@
     const response = await useFetch('/api/allBusStops')
     const status = ref(response.status)
     const submitted = ref(false)
+    const selectedPlaceTemp = ref('')
     const selectedPlace = ref('')
     const locResponse = await useFetch('/api/onemap',{
         query: {value: startingLocation}
     })
+    
     function update(){
         submitted.value = true
         travelTime.value = travelTimeTemp.value 
+        selectedPlace.value = selectedPlaceTemp.value
+        travelTimeTemp.value = 60
+        selectedPlaceTemp.value = ''
+        filterBusStops(travelTime.value,response.data.value,startingLocation.value)
         return 
     }
 </script>
 <template>
     <h1>Welcome User, please select your preferences!</h1>
     <div v-if="!submitted">
-        <input type="number" v-model="travelTimeTemp" placeholder="Choose your max travel time from your starting location">
+        <input type="number" v-model="travelTimeTemp" placeholder="Choose your max travel time from your starting location"><br>
         <input type="text" v-model="startingLocation" placeholder="Choose your starting location">
         <div v-if="startingLocation && locResponse.data.value?.length">
-            <select name="" id="" v-model="selectedPlace">
+            <select name="" id="" v-model="selectedPlaceTemp" size="5">
                 <option value="" v-for="place of locResponse.data.value.slice(0,5)" :value="place" :key="place.ADDRESS">
                     {{ place.ADDRESS }}
                 </option>
             </select>
-        </div>
+        </div><br>
         <button @click="update()">Submit Preferences</button>
     </div>
     <div v-else-if="submitted">
