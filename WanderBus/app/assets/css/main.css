@@ -1,4 +1,4 @@
-/* assets/css/main.css */
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -22,9 +22,25 @@ main {
 }
 
 
-footer {
-    background-color: grey;
-    color: white;
-    display: flex;
-    justify-content:flex-end;
+/* landing page */
+.section-white {
+  background: #fff;
+  border-top: 1px solid #e3e5ec;
+  border-bottom: 1px solid #e3e5ec;
+}
+
+.section-title {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: #141a33;
+}
+
+.hero-text {
+  font-size: 1.1rem;
+  color: #4a5068;
+}
+
+.small-note {
+  font-size: 0.85rem;
+  color: #6b7085;
 }
