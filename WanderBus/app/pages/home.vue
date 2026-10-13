@@ -16,12 +16,22 @@
     const chosenStop = ref('')
     const stopDetails = ref('')
     const startDetails = ref('')
+    const errorMessage = ref('')
+    const possibleStops = ref({})
+    function reroll(){
+        chosenStop.value = chooseStop(possibleStops.value)
+        stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
+        startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+    }
     async function update(){
         submitted.value = true
-        travelTime.value = travelTimeTemp.value 
+        errorMessage.value = ''
+        chosenStop.value = ''
+        travelTime.value = travelTimeTemp.value
         selectedPlace.value = selectedPlaceTemp.value
         travelTimeTemp.value = 60
-        
+
+        try {
         let starts = filterStartingBusStops(travelTime.value,response.data.value,selectedPlaceTemp.value)
         startingStops.value = starts
         let now = Date.now() / 60000
@@ -50,12 +60,13 @@
                 }
             }
         }
-        let possibleStops = filterBusStops(arrivals,travelTime.value, allRoutes.data.value,starts)
-        chosenStop.value = chooseStop(possibleStops)
+        possibleStops.value = filterBusStops(arrivals,travelTime.value, allRoutes.data.value,starts)
+        chosenStop.value = chooseStop(possibleStops.value)
         stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
         startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
-
-
+        } catch (e) {
+            errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
+        }
 
         selectedPlaceTemp.value = ''
         return 
@@ -73,28 +84,36 @@
                 </option>
             </select>
         </div><br>
-        <button @click="update()">Submit Preferences</button>
+        <button @click="update()" :disabled="!selectedPlaceTemp">Submit Preferences</button>
     </div>
     <div v-else-if="submitted">
-        <div v-if="chosenStop">
-            <h1>Your Chosen Stop is...{{ chosenStop.destination }}, {{ stopDetails.RoadName }} !!</h1>
-            <h3>(Near {{ stopDetails.Description }})</h3><br><br>
+        <div v-if="errorMessage">
+            <h1>{{ errorMessage }}</h1>
+            <button @click="submitted = false">Back</button>
+        </div>
+        <div v-else-if="chosenStop">
+            <h1>Your Chosen Stop is...{{ stopDetails.Description }} ({{ chosenStop.destination }}) !!</h1>
+            <h3>(Near {{ stopDetails.RoadName }})</h3><br><br>
             <h1>Here is the route to get there:</h1><br>
             <ol>
-                <li>
-                    <h3>Walk {{ Math.ceil(startingStops[chosenStop.chosen.boardAt]) }} min to {{ chosenStop.chosen.boardAt }}, </h3>
+                <li v-if="chosenStop.chosen.bus">
+                    <h3>Walk {{ Math.ceil(startingStops[chosenStop.chosen.boardAt]) }} min to {{ startDetails.Description }} ({{ chosenStop.chosen.boardAt }}), {{ startDetails.RoadName }}</h3>
+                </li>
+                <li v-else>
+                    <h3>Walk for {{ Math.ceil(startingStops[chosenStop.chosen.boardAt]) }} min</h3>
                 </li>
                 <li>
-                    <h3 v-if="chosenStop.chosen.bus">Take bus {{ chosenStop.chosen.bus }} for {{ chosenStop.chosen.stops }} stops to reach {{ chosenStop.destination }}, {{ stopDetails.RoadName }}</h3>
+                    <h3 v-if="chosenStop.chosen.bus">Take bus {{ chosenStop.chosen.bus }} for {{ chosenStop.chosen.stops }} stops to reach {{ stopDetails.Description }} ({{ chosenStop.destination }}), {{ stopDetails.RoadName }}</h3>
                     <h3 v-else>You have reached {{ chosenStop.destination }}, {{ stopDetails.RoadName }} !!</h3>
                 </li>
-                <li>
-                    <h3>Your total travel time to reach our chosen bus stop is approximately {{ Math.ceil(chosenStop.chosen.totalTime) }} minutes</h3>
-                </li>
+            </ol>
+
+                    <h3>Your total travel time to reach our chosen bus stop is approximately {{ Math.ceil(chosenStop.chosen.totalTime) }} minutes.</h3>
                     
                     
                 
-            </ol>
+            <button @click="reroll()">Reroll</button><br>
+            <button @click="submitted = false">Back</button>
         </div>
         <div v-else>
             <h1>Preparing your adventure...</h1>
