@@ -1,6 +1,6 @@
 <script setup>
     //Activity type, travel time, 
-    const travelTimeTemp = ref(60)
+    const travelTimeTemp = ref(null)
     const travelTime = ref(60)
     const startingLocation = ref('')
     const response = await useFetch('/api/allBusStops')
@@ -29,7 +29,7 @@
         chosenStop.value = ''
         travelTime.value = travelTimeTemp.value
         selectedPlace.value = selectedPlaceTemp.value
-        travelTimeTemp.value = 60
+        travelTimeTemp.value = null
 
         try {
         let starts = filterStartingBusStops(travelTime.value,response.data.value,selectedPlaceTemp.value)
@@ -84,7 +84,7 @@
                 </option>
             </select>
         </div><br>
-        <button @click="update()" :disabled="!selectedPlaceTemp">Submit Preferences</button>
+        <button @click="update()" :disabled="!selectedPlaceTemp || !travelTimeTemp">Submit Preferences</button>
     </div>
     <div v-else-if="submitted">
         <div v-if="errorMessage">
