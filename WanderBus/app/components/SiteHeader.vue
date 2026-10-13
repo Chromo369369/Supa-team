@@ -19,8 +19,8 @@
 
                 <div id="main-nav" class="collapse navbar-collapse justify-content-end">
                     <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3 gap-md-4 py-3 py-md-0">
-                        <NuxtLink to="/" class="header-link" active-class="active">Home</NuxtLink>
-                        <NuxtLink to="/home" class="header-login">Login</NuxtLink>
+                        <NuxtLink to="/home" class="header-link" active-class="active">Home</NuxtLink>
+                        <NuxtLink to="/login" class="header-login">Login</NuxtLink>
                         <NuxtLink to="/register" class="btn btn-wb-dark">Register</NuxtLink>
                     </div>
                 </div>

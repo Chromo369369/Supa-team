@@ -1,4 +1,7 @@
 <script setup>
+    import SpinFilters from '~/components/spin/SpinFilters.vue';
+    import SpinResults from '~/components/spin/SpinResults.vue';
+
     //Activity type, travel time, 
     const travelTimeTemp = ref(null)
     const travelTime = ref(60)
@@ -29,7 +32,6 @@
         chosenStop.value = ''
         travelTime.value = travelTimeTemp.value
         selectedPlace.value = selectedPlaceTemp.value
-        travelTimeTemp.value = null
 
         try {
         let starts = filterStartingBusStops(travelTime.value,response.data.value,selectedPlaceTemp.value)
@@ -68,59 +70,61 @@
             errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
         }
 
-        selectedPlaceTemp.value = ''
-        return 
+        return
     }
 </script>
-<template>
-    <h1 :hidden="submitted">Welcome User, please select your preferences!</h1>
-    <div v-if="!submitted">
-        <input type="number" v-model="travelTimeTemp" placeholder="Choose your max travel time from your starting location"><br>
-        <input type="text" v-model="startingLocation" placeholder="Choose your starting location" @input="selectedPlaceTemp=''">
-        <div v-if="startingLocation && locResponse.data.value?.length && !selectedPlaceTemp">
-            <select name="" id="" v-model="selectedPlaceTemp" size="5" @change="startingLocation = selectedPlaceTemp.ADDRESS">
-                <option v-for="place of locResponse.data.value.slice(0,5)" :value="place" :key="place.ADDRESS">
-                    {{ place.ADDRESS }}
-                </option>
-            </select>
-        </div><br>
-        <button @click="update()" :disabled="!selectedPlaceTemp || !travelTimeTemp">Submit Preferences</button>
-    </div>
-    <div v-else-if="submitted">
-        <div v-if="errorMessage">
-            <h1>{{ errorMessage }}</h1>
-            <button @click="submitted = false">Back</button>
-        </div>
-        <div v-else-if="chosenStop">
-            <h1>Your Chosen Stop is...{{ stopDetails.Description }} ({{ chosenStop.destination }}) !!</h1>
-            <h3>(Near {{ stopDetails.RoadName }})</h3><br><br>
-            <h1>Here is the route to get there:</h1><br>
-            <ol>
-                <li v-if="chosenStop.chosen.bus">
-                    <h3>Walk {{ Math.ceil(startingStops[chosenStop.chosen.boardAt]) }} min to {{ startDetails.Description }} ({{ chosenStop.chosen.boardAt }}), {{ startDetails.RoadName }}</h3>
-                </li>
-                <li v-else>
-                    <h3>Walk for {{ Math.ceil(startingStops[chosenStop.chosen.boardAt]) }} min</h3>
-                </li>
-                <li>
-                    <h3 v-if="chosenStop.chosen.bus">Take bus {{ chosenStop.chosen.bus }} for {{ chosenStop.chosen.stops }} stops to reach {{ stopDetails.Description }} ({{ chosenStop.destination }}), {{ stopDetails.RoadName }}</h3>
-                    <h3 v-else>You have reached {{ chosenStop.destination }}, {{ stopDetails.RoadName }} !!</h3>
-                </li>
-            </ol>
 
-                    <h3>Your total travel time to reach our chosen bus stop is approximately {{ Math.ceil(chosenStop.chosen.totalTime) }} minutes.</h3>
-                    
-                    
-                
-            <button @click="reroll()">Reroll</button><br>
-            <button @click="submitted = false">Back</button>
+
+<template>
+    <section class="container py-4 spin-page">
+        <h1 class="page-title">Spin a side quest</h1>
+        <p class="small-note mb-4">
+            📍 {{ selectedPlace ? `Starting near ${selectedPlace.ADDRESS}` : 'Pick a starting location to begin' }}
+        </p>
+
+        <div class="spin-layout">
+            <SpinFilters
+                v-model:travel-time="travelTimeTemp"
+                v-model:starting-location="startingLocation"
+                v-model:selected-place="selectedPlaceTemp"
+                :places="locResponse.data.value"
+                @submit="update()"
+            />
+
+            <SpinResults
+                :submitted="submitted"
+                :error-message="errorMessage"
+                :chosen-stop="chosenStop"
+                :stop-details="stopDetails"
+                :start-details="startDetails"
+                :starting-stops="startingStops"
+                @reroll="reroll()"
+            />
         </div>
-        <div v-else>
-            <h1>Preparing your adventure...</h1>
-        </div>
-        
-    
-    </div>
-    
-    
+    </section>
 </template>
+
+<style scoped>
+.page-title {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: #141a33;
+}
+
+.spin-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 32px;
+}
+
+/* small screens: one column, filters become a bar pinned to the bottom */
+@media (max-width: 991.98px) {
+  .spin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .spin-page {
+    padding-bottom: 120px !important;
+  }
+}
+</style>
