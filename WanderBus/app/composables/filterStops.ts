@@ -22,19 +22,17 @@ export async function filterBusStops(travel: any,busStops: any,start: any){
     //   "LONGTITUDE": "103.854713903431"
     // }
         //}
-        
+        let final:any[]=[]
         let distances:any[] = []
+        let minTime = Math.min(travel,10) //in minutes
+        let maxWalk = (1/12) * minTime //in km
         for (let bstop of busStops){
             let length = Math.abs(bstop.Latitude - start.LATITUDE)
             let height = Math.abs(bstop.Longitude - start.LONGITUDE)
-            distances.push((length + height) * 111) 
-            
-
+            let distance = (length + height) * 111
+            if (distance <= maxWalk){
+                final.push(bstop)
+                distances.push(distance)
+            } 
         }
-        distances = distances.sort()
-        let totalTimings:any[] = []
-        for (let i=0;i<3;i++){
-            let timing = distances[i] / 
-        }
-
     }
