@@ -2,29 +2,84 @@
 </script>
 
 <template>
-    <footer class="wb-header">
-        <nav class="navbar navbar-expand-md bg-light border-bottom">
-            <div class="container-fluid">
-                <NuxtLink to="/" class="navbar-brand fw-bold">WanderBus</NuxtLink>
+    <footer class="wb-footer">
+        <div class="container py-5">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <NuxtLink to="/" class="footer-brand">🚌 WanderBus</NuxtLink>
+                    <p class="footer-text mt-2 mb-0">
+                        Take a random bus. Get off somewhere worth it.
+                    </p>
+                </div>
 
-                <button class="navbar-toggler" type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#main-nav"
-                        aria-controls="main-nav"
-                        aria-expanded="false"
-                        aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
+                <div class="col-6 col-md-3">
+                    <h6 class="footer-heading">Explore</h6>
+                    <ul class="footer-links">
+                        <li><NuxtLink to="/">Landing</NuxtLink></li>
+                        <li><NuxtLink to="/home">Home</NuxtLink></li>
+                    </ul>
+                </div>
 
-                <div id="main-nav" class="collapse navbar-collapse">
-                    <ul class="navbar-nav ms-auto gap-md-2">
-                        <li class="nav-item"><NuxtLink to="/home" class="nav-link" active-class="active">Home</NuxtLink></li>
-                        <li class="nav-item"><NuxtLink to="/login" class="nav-link" active-class="active">Login</NuxtLink></li>
-                        <li class="nav-item"><NuxtLink to="/register" class="nav-link" active-class="active">Register</NuxtLink></li>
+                <div class="col-6 col-md-3">
+                    <h6 class="footer-heading">Account</h6>
+                    <ul class="footer-links">
+                        <li><NuxtLink to="/login">Login</NuxtLink></li>
+                        <li><NuxtLink to="/register">Register</NuxtLink></li>
                     </ul>
                 </div>
             </div>
-        </nav>
+
+            <div class="footer-bottom mt-4 pt-3">
+                © 2026 WanderBus - WAD2 G6T3
+            </div>
+        </div>
     </footer>
-    
 </template>
+
+<style scoped>
+.wb-footer {
+  background: #141a33;
+  color: #c9ccd6;
+}
+
+.footer-brand {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fff;
+  text-decoration: none;
+}
+
+.footer-text {
+  font-size: 0.9rem;
+}
+
+.footer-heading {
+  color: #f5a623;
+  font-weight: 700;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-links li {
+  margin-top: 8px;
+}
+
+.footer-links a {
+  color: #c9ccd6;
+  text-decoration: none;
+}
+
+.footer-links a:hover {
+  color: #fff;
+}
+
+.footer-bottom {
+  border-top: 1px solid #2a3150;
+  font-size: 0.8rem;
+  color: #6b7085;
+}
+</style>

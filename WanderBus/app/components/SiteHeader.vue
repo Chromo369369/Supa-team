@@ -4,9 +4,9 @@
 <template>
 
     <header class="wb-header">
-        <nav class="navbar navbar-expand-md bg-light border-bottom">
-            <div class="container-fluid">
-                <NuxtLink to="/" class="navbar-brand fw-bold">WanderBus</NuxtLink>
+        <nav class="navbar navbar-expand-md">
+            <div class="container-fluid px-4">
+                <NuxtLink to="/" class="navbar-brand header-brand">🚌 WanderBus</NuxtLink>
 
                 <button class="navbar-toggler" type="button"
                         data-bs-toggle="collapse"
@@ -17,12 +17,13 @@
                     <span class="navbar-toggler-icon"></span>
                 </button>
 
-                <div id="main-nav" class="collapse navbar-collapse">
-                    <ul class="navbar-nav ms-auto gap-md-2">
-                        <li class="nav-item"><NuxtLink to="/home" class="nav-link" active-class="active">Home</NuxtLink></li>
-                        <li class="nav-item"><NuxtLink to="/login" class="nav-link" active-class="active">Login</NuxtLink></li>
-                        <li class="nav-item"><NuxtLink to="/register" class="nav-link" active-class="active">Register</NuxtLink></li>
-                    </ul>
+                <!-- all links grouped on the right -->
+                <div id="main-nav" class="collapse navbar-collapse justify-content-end">
+                    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3 gap-md-4 py-3 py-md-0">
+                        <NuxtLink to="/home" class="header-link" active-class="active">Home</NuxtLink>
+                        <NuxtLink to="/login" class="header-login">Login</NuxtLink>
+                        <NuxtLink to="/register" class="btn btn-wb-dark">Register</NuxtLink>
+                    </div>
                 </div>
             </div>
         </nav>
@@ -32,8 +33,50 @@
 
 <style scoped>
 .wb-header {
-    position: sticky;
-    top: 0;
-    z-index: 1030;
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  background: #fff;
+  border-bottom: 1px solid #e3e5ec;
+}
+
+.header-brand {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #141a33;
+}
+
+.header-link {
+  color: #4a5068;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.header-link:hover,
+.header-link.active {
+  color: #141a33;
+}
+
+.header-login {
+  color: #0b7a4b;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.header-login:hover {
+  color: #096640;
+}
+
+.btn-wb-dark {
+  background: #141a33;
+  color: #fff;
+  border-radius: 50px;
+  padding: 8px 22px;
+  font-weight: 600;
+}
+
+.btn-wb-dark:hover {
+  background: #2a3150;
+  color: #fff;
 }
 </style>
