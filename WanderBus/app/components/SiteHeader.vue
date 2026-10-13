@@ -17,7 +17,6 @@
                     <span class="navbar-toggler-icon"></span>
                 </button>
 
-                <!-- all links grouped on the right -->
                 <div id="main-nav" class="collapse navbar-collapse justify-content-end">
                     <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3 gap-md-4 py-3 py-md-0">
                         <NuxtLink to="/home" class="header-link" active-class="active">Home</NuxtLink>

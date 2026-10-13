@@ -7,18 +7,9 @@ import LandingCta from '~/components/landing/LandingCta.vue';
 </script>
 
 <template>
-    <!-- hero -->
     <LandingHero />
-
-    <!-- how our app works? -->
     <LandingSteps />
-
-    <!-- filters that user may select when choosing adventure -->
     <LandingSafety />
-
-    <!-- features -->
     <LandingFeatures />
-
-    <!-- CTA -->
     <LandingCta />
 </template>
