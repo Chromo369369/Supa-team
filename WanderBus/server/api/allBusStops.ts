@@ -1,4 +1,4 @@
-export default defineEventHandler(async(event) => {
+export default defineCachedEventHandler(async(event) => {
     const config = useRuntimeConfig(event)
     let allStops:any[] = []
     let skip = 0
@@ -12,4 +12,4 @@ export default defineEventHandler(async(event) => {
     }
     return allStops
     
-})
+},{maxAge: 60*60*24})
