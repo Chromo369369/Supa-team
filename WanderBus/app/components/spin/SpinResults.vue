@@ -42,11 +42,23 @@ const boardLines = computed(() => {
             </div>
 
             <div v-else class="row g-4 align-items-start">
-                <div class="col-xl-5">
-                    <SpinTicket />
+                <div class="col-12">
+                    <SpinTicket
+                        :key="chosenStop.destination"
+                        icon="🚌"
+                        title="Mystery stop"
+                        subtitle="A random stop within your travel time"
+                        :travel-time="Math.ceil(chosenStop.chosen.totalTime)"
+                        :bus="chosenStop.chosen.bus"
+                        :board-at="startDetails.Description"
+                        :walk="`${Math.round(startingStops[chosenStop.chosen.boardAt] / 12 * 1000)} m walk`"
+                        :get-off-at="stopDetails.Description"
+                        :area="stopDetails.RoadName"
+                        :stops="chosenStop.chosen.stops"
+                    />
                 </div>
 
-                <div class="col-xl-7">
+                <div class="col-12">
                     <h2 class="quest-title">Your side quest</h2>
                     <p class="results-note">
                         Your chosen stop is {{ stopDetails.Description }} ({{ chosenStop.destination }}), near {{ stopDetails.RoadName }}.

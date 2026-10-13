@@ -1,6 +1,19 @@
 <script setup>
 import { ref } from 'vue'
 
+defineProps({
+    icon: { type: String, default: '🍜' },
+    title: { type: String, default: 'Makan run' },
+    subtitle: { type: String, default: 'Hawker stalls and kopi nearby' },
+    travelTime: { type: Number, default: 19 },
+    bus: { type: String, default: '16' }, 
+    boardAt: { type: String, default: 'SMU' },
+    walk: { type: String, default: '140 m walk' },
+    getOffAt: { type: String, default: 'Blk 55' },
+    area: { type: String, default: 'Bukit Merah' },
+    stops: { type: Number, default: 12 }
+})
+
 const isRevealed = ref(false)
 
 function toggleStub() {
@@ -9,30 +22,43 @@ function toggleStub() {
 </script>
 
 <template>
-    <section class="ticket mx-auto">
-    <div class="ticket-main">
-        <img src="/img/blk55.jpg" class="ticket-img">
-        <div class="ticket-info">
-            <h4 class="ticket-title">Makan Run</h4>
-            <span class="ticket-date">⏱ 19 min travel time</span>
-        </div>
-    </div>
-
-    <div class="ticket-stub my-auto" @click="toggleStub">
-        <div v-if="!isRevealed">
-            <h4 class="stub-title text-center fs-5">?</h4>
-            <p class="stub-text text-center">Tear here</p>
+    <section v-if="!isRevealed" class="ticket mx-auto">
+        <div class="ticket-main">
+            <span class="ticket-icon">{{ icon }}</span>
+            <div class="ticket-info">
+                <h4 class="ticket-title">{{ title }}</h4>
+                <p class="ticket-subtitle">{{ subtitle }}</p>
+                <span class="ticket-time">⏱ {{ travelTime }} min travel time</span>
+                <div class="ticket-barcode"></div>
+            </div>
         </div>
 
-        <div v-else>
-            <h4 class="stub-title">Bus 16</h4>
-            <p class="stub-text">
-                Board at SMU (140m walk) <br><br>
-                Get off at Blk 55 (Bukit Merah) <br><br>
-                Ride 12 stops, about 19 min <br><br>
+        <button class="ticket-stub" type="button" @click="toggleStub">
+            <span class="stub-mark">?</span>
+            <span class="stub-text">Tear here</span>
+        </button>
+    </section>
+
+    <section v-else class="ticket ticket-revealed mx-auto" @click="toggleStub">
+        <div class="bus-col">
+            <span class="detail-label">{{ bus ? 'Bus' : 'On foot' }}</span>
+            <span class="bus-number">{{ bus || 'Walk' }}</span>
+        </div>
+
+        <div class="detail-col">
+            <template v-if="bus">
+                <span class="detail-label">Board at</span>
+                <p class="detail-value">{{ boardAt }} <span class="detail-muted">· {{ walk }}</span></p>
+            </template>
+
+            <span class="detail-label">{{ bus ? 'Get off at' : 'Walk to' }}</span>
+            <p class="detail-value">{{ getOffAt }} <span class="detail-muted">· {{ area }}</span></p>
+
+            <span class="detail-label">{{ bus ? 'Ride' : 'Walk' }}</span>
+            <p class="detail-value">
+                <template v-if="bus">{{ stops }} stops, </template>about {{ travelTime }} min
             </p>
         </div>
-    </div>
     </section>
 </template>
 
@@ -41,70 +67,125 @@ function toggleStub() {
 .ticket {
   display: flex;
   max-width: 580px;
-  background: #2e4052;
-  color: #fff;
-  border-radius: 20px;
+  min-height: 230px;
+  background: #fff;
+  border-left: 6px solid #0b7a4b;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(20, 26, 51, 0.12);
+  overflow: hidden;
+  text-align: left;
 }
 
 .ticket-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 12px;
-}
-
-.ticket-img {
-  width: 100%;
-  aspect-ratio: 16 / 9 ;
-  object-fit: cover;
-  border-radius: 14px;
-}
-
-.ticket-info {
-  display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  padding: 16px 10px 6px;
+  padding: 24px;
+  border-right: 4px dotted #c9ccd6;
+}
+
+.ticket-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #e3f2ea;
+  font-size: 1.2rem;
 }
 
 .ticket-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  margin: 16px 0 2px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #141a33;
 }
 
-.ticket-date {
-  font-size: 0.85rem;
-  color: #a0a0a5;
+.ticket-subtitle {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: #4a5068;
+}
+
+.ticket-time {
+  font-size: 0.95rem;
+  color: #4a5068;
+}
+
+.ticket-barcode {
+  height: 8px;
+  width: 170px;
+  margin-top: 12px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(90deg, #e3e5ec 0 4px, transparent 4px 6px);
 }
 
 .ticket-stub {
-  position: relative;
-  width: 160px;
+  width: 130px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 28px 20px 18px;
-  border-left: 4px dotted #111;
+  align-items: center;
+  justify-content: center;
+  background: #0b7a4b;
+  color: #fff;
+  border: none;
   cursor: pointer;
-  user-select: none;
 }
 
-.stub-title {
-  margin: 0 0 12px;
-  font-size: 1.15rem;
-  font-weight: 600;
+.ticket-stub:hover {
+  background: #096640;
+}
+
+.stub-mark {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .stub-text {
-  margin: 0;
   font-size: 0.85rem;
-  line-height: 1.6;
-  color: #a0a0a5;
+  font-weight: 700;
 }
 
-.stub-number {
+.ticket-revealed {
+  gap: 24px;
+  padding: 24px;
+  border-right: 4px dotted #c9ccd6;
+  cursor: pointer;
+}
+
+.bus-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.bus-number {
+  font-size: 3.4rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #0b7a4b;
+}
+
+.detail-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-label {
   font-size: 0.85rem;
-  color: #a0a0a5;
+  color: #6b7085;
+}
+
+.detail-value {
+  margin: 0 0 8px;
+  font-weight: 600;
+  color: #141a33;
+}
+
+.detail-muted {
+  font-weight: 400;
+  color: #6b7085;
 }
 </style>
