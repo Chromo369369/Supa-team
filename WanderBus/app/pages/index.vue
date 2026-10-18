@@ -12,4 +12,6 @@ import LandingCta from '~/components/landing/LandingCta.vue';
     <LandingSafety />
     <LandingFeatures />
     <LandingCta />
+
+
 </template>
