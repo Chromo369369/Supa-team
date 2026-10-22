@@ -76,7 +76,7 @@
 
               <!-- 7. Save Button -->
               <div class="d-grid">
-                <button type="submit" class="btn btn-teal text-white fw-bold">Save Memory</button>
+                <button type="submit" class="btn btn-save text-white fw-bold">Save Memory</button>
               </div>
               
             </form>
@@ -245,9 +245,15 @@ onMounted(() => {
 .bg-teal {
   background-color: #1b7a86 !important; 
 }
-.btn-teal {
-  background-color: #1b7a86;
-  border-color: #1b7a86;
+.btn-save {
+  background: #0b7a4b;
+  border-color: #0b7a4b;
+  margin-top: auto;
+  padding: 12px 22px;
+  border: none;
+  border-radius: 50px;
+  font-weight: 600;
+  color: #fff;
 }
 .btn-teal:hover {
   background-color: #145e67;
