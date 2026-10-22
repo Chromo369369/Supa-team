@@ -2,7 +2,7 @@
   <div class="container-fluid py-4 px-md-5 bg-light min-vh-100">
     <div class="row">
       
-      <!-- Left Column: Input Form -->
+      <!--Left Column: Input Form -->
       <div class="col-lg-4 col-md-5 mb-4">
         <div class="card shadow-sm border-0 rounded-4">
           <div class="card-body p-4">
