@@ -20,8 +20,11 @@
                 <div id="main-nav" class="collapse navbar-collapse justify-content-end">
                     <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3 gap-md-4 py-3 py-md-0">
                         <NuxtLink to="/home" class="header-link" active-class="active">Home</NuxtLink>
+                        <a href="/group" class="header-link">Group_Test</a>
                         <NuxtLink to="/login" class="header-login">Login</NuxtLink>
+                        <NuxtLink to="/passport" class="header-passport">Passport</NuxtLink>
                         <NuxtLink to="/register" class="btn btn-wb-dark">Register</NuxtLink>
+                        
                     </div>
                 </div>
             </div>
@@ -57,6 +60,12 @@
 }
 
 .header-login {
+  color: #0b7a4b;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.header-passport {
   color: #0b7a4b;
   font-weight: 600;
   text-decoration: none;
