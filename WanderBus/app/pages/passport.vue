@@ -3,7 +3,7 @@
     <div class="row">
       
       <!--Left Column: Input Form -->
-      <div class="col-lg-4 col-md-5 mb-4">
+      <div class="col-lg-5 col-md-7 mb-4">
         <div class="card shadow-sm border-0 rounded-4">
           <div class="card-body p-4">
             <h3 class="mb-2 fw-bold text-dark">
@@ -85,7 +85,7 @@
       </div>
 
       <!-- Right Column: Generated Log Cards -->
-      <div class="col-lg-8 col-md-7">
+      <div class="col-lg-7 col-md-5">
         <h2 class="fw-bold mb-4">Your Digital Passport Entries</h2>
         
         <div class="d-flex flex-column gap-3">
