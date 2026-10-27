@@ -1,41 +1,64 @@
 <script setup>
-    import SpinFilters from '~/components/spin/SpinFilters.vue';
-    import SpinResults from '~/components/spin/SpinResults.vue';
-    const {$supabase} = useNuxtApp()
-    //Check for session validity first
-    definePageMeta( {middleware: 'auth' })
-    //Activity type, travel time, 
-    const travelTimeTemp = ref(null)
-    const travelTime = ref(60)
-    const startingLocation = ref('')
-    const response = await useFetch('/api/allBusStops')
-    const status = ref(response.status)
-    const submitted = ref(false)
-    const selectedPlaceTemp = ref('')
-    const selectedPlace = ref('')
-    const locResponse = await useFetch('/api/onemap',{
-        query: {value: startingLocation}
-    })
-    const startingStops = ref('')
-    const allRoutes = await useFetch('/api/allRoutes')
-    const chosenStop = ref('')
-    const stopDetails = ref('')
-    const startDetails = ref('')
-    const errorMessage = ref('')
-    const possibleStops = ref({})
-    function reroll(){
-        chosenStop.value = chooseStop(possibleStops.value)
-        stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
-        startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
-    }
-    async function update(){
-        submitted.value = true
-        errorMessage.value = ''
-        chosenStop.value = ''
-        travelTime.value = travelTimeTemp.value
-        selectedPlace.value = selectedPlaceTemp.value
+import SpinFilters from '~/components/spin/SpinFilters.vue';
+import SpinResults from '~/components/spin/SpinResults.vue';
 
-        try {
+// Access shared trips state
+const savedTrips = useTrips()
+
+// Activity type, travel time, 
+const travelTimeTemp = ref(null)
+const travelTime = ref(60)
+const startingLocation = ref('')
+const response = await useFetch('/api/allBusStops')
+const status = ref(response.status)
+const submitted = ref(false)
+const selectedPlaceTemp = ref('')
+const selectedPlace = ref('')
+const locResponse = await useFetch('/api/onemap',{
+    query: {value: startingLocation}
+})
+const startingStops = ref('')
+const allRoutes = await useFetch('/api/allRoutes')
+const chosenStop = ref('')
+const stopDetails = ref('')
+const startDetails = ref('')
+const errorMessage = ref('')
+const possibleStops = ref({})
+
+function reroll(){
+    chosenStop.value = chooseStop(possibleStops.value)
+    stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
+    startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+    autoLogTrip()
+}
+
+// Helper to auto-log the trip into Passport
+function autoLogTrip() {
+  if (chosenStop.value && stopDetails.value) {
+    const today = new Date().toISOString().split('T')[0]
+    savedTrips.value.unshift({
+      id: Date.now(),
+      date: today,
+      busService: chosenStop.value.chosen?.service || 'N/A',
+      busStop: {
+        code: stopDetails.value.BusStopCode,
+        name: stopDetails.value.Description || stopDetails.value.RoadName || stopDetails.value.BusStopCode
+      },
+      memories: '',
+      photoLink: '',
+      isPublic: false
+    })
+  }
+}
+
+async function update(){
+    submitted.value = true
+    errorMessage.value = ''
+    chosenStop.value = ''
+    travelTime.value = travelTimeTemp.value
+    selectedPlace.value = selectedPlaceTemp.value
+
+    try {
         let starts = filterStartingBusStops(travelTime.value,response.data.value,selectedPlaceTemp.value)
         startingStops.value = starts
         let now = Date.now() / 60000
@@ -54,11 +77,9 @@
                 if (timeAtStop <= arrival1){
                     arrivals[stopCode][bus.ServiceNo] = Math.ceil((arrival1-now))
                 }
-                
                 else if (timeAtStop <= arrival2){
                     arrivals[stopCode][bus.ServiceNo] = Math.ceil((arrival2-now))
                 }
-                
                 else if (timeAtStop <= arrival3){
                     arrivals[stopCode][bus.ServiceNo] = Math.ceil((arrival3-now))
                 }
@@ -68,65 +89,14 @@
         chosenStop.value = chooseStop(possibleStops.value)
         stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
         startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
-        } catch (e) {
-            errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
-        }
 
-        return
+        // Auto-create passport log on successful spin
+        autoLogTrip()
+
+    } catch (e) {
+        errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
     }
+
+    return
+}
 </script>
-
-
-<template>
-    <section class="container py-4 spin-page">
-        <h1 class="page-title">Spin a side quest</h1>
-        <p class="small-note mb-4">
-            📍 {{ selectedPlace ? `Starting near ${selectedPlace.ADDRESS}` : 'Pick a starting location to begin' }}
-        </p>
-
-        <div class="spin-layout">
-            <SpinFilters
-                v-model:travel-time="travelTimeTemp"
-                v-model:starting-location="startingLocation"
-                v-model:selected-place="selectedPlaceTemp"
-                :places="locResponse.data.value"
-                @submit="update()"
-            />
-
-            <SpinResults
-                :submitted="submitted"
-                :error-message="errorMessage"
-                :chosen-stop="chosenStop"
-                :stop-details="stopDetails"
-                :start-details="startDetails"
-                :starting-stops="startingStops"
-                @reroll="reroll()"
-            />
-        </div>
-    </section>
-</template>
-
-<style scoped>
-.page-title {
-  font-size: 2.4rem;
-  font-weight: 800;
-  color: #141a33;
-}
-
-.spin-layout {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 32px;
-}
-
-/* small screens: one column, filters become a bar pinned to the bottom */
-@media (max-width: 991.98px) {
-  .spin-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .spin-page {
-    padding-bottom: 120px !important;
-  }
-}
-</style>
