@@ -1,4 +1,25 @@
 <script setup>
+const {$supabase} = useNuxtApp()
+const valid_session = ref(false)
+async function check_session(){
+  const {data,error} = await $supabase.auth.getUser()
+  if(data.user){
+    valid_session.value = true
+  }else{
+    valid_session.value = false
+  }
+}
+onMounted(()=>{check_session()})
+async function logout(){
+  await $supabase.auth.signOut()
+  await navigateTo('/',{replace: true})
+  return
+}
+const {data: {subscription} } =  $supabase.auth.onAuthStateChange(check_session)
+
+onUnmounted(() =>
+  subscription.unsubscribe()
+)
 </script>
 
 <template>
@@ -21,9 +42,10 @@
                     <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3 gap-md-4 py-3 py-md-0">
                         <NuxtLink to="/home" class="header-link" active-class="active">Home</NuxtLink>
                         <a href="/group" class="header-link">Group_Test</a>
-                        <NuxtLink to="/login" class="header-login">Login</NuxtLink>
+                        <NuxtLink to="/login" class="header-login" v-if="!valid_session">Login</NuxtLink>
                         <NuxtLink to="/passport" class="header-passport">Passport</NuxtLink>
-                        <NuxtLink to="/register" class="btn btn-wb-dark">Register</NuxtLink>
+                        <NuxtLink to="/register" class="btn btn-wb-dark" v-if="!valid_session">Register</NuxtLink>
+                        <NuxtLink to ='/' class="header-link" v-if="valid_session" v-on:click="logout()">Logout</NuxtLink>
                         
                     </div>
                 </div>
