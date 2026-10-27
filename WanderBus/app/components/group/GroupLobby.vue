@@ -1,5 +1,25 @@
 <script setup>
+import { ref, onMounted } from 'vue'
+
 defineEmits(['leave'])
+
+const { $supabase } = useNuxtApp()
+const hostEmail = ref('Loading email...')
+const groupCode = Math.floor(100000 + Math.random() * 900000)
+
+onMounted(async () => {
+  try {
+    const { data, error } = await $supabase.auth.getUser()
+    if (error) throw error
+    if (data.user && data.user.email) {
+      hostEmail.value = data.user.email
+    } else {
+      hostEmail.value = 'Email unavailable'
+    }
+  } catch {
+    hostEmail.value = 'Email unavailable'
+  }
+})
 </script>
 
 <template>
@@ -11,7 +31,7 @@ defineEmits(['leave'])
         <p>Invite your friends along for your next side quest.</p>
 
         <span class="code-label">Group code</span>
-        <div class="group-code">WB2026</div>
+        <div class="group-code">{{ groupCode }}</div>
 
         <button
           type="button"
@@ -23,6 +43,7 @@ defineEmits(['leave'])
         <button
           type="button"
           class="leave-button"
+          @click="$emit('leave')"
         >
           Leave group
         </button>
@@ -39,7 +60,7 @@ defineEmits(['leave'])
 
         <div class="member-row">
           <div class="member-details">
-            <strong>Host Name</strong>
+            <strong>{{ hostEmail }}</strong>
             <span>Ready to explore</span>
           </div>
 
@@ -100,7 +121,7 @@ defineEmits(['leave'])
   background: #f6f8fb;
   color: #141a33;
   text-align: center;
-  font-size: 1.8rem;
+  font-size: 30px;
   font-weight: 800;
   letter-spacing: 4px;
 }
