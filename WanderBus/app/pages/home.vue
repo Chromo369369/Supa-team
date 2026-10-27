@@ -1,7 +1,9 @@
 <script setup>
     import SpinFilters from '~/components/spin/SpinFilters.vue';
     import SpinResults from '~/components/spin/SpinResults.vue';
-
+    const {$supabase} = useNuxtApp()
+    //Check for session validity first
+    definePageMeta( {middleware: 'auth' })
     //Activity type, travel time, 
     const travelTimeTemp = ref(null)
     const travelTime = ref(60)

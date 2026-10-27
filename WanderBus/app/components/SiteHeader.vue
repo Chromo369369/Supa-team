@@ -1,12 +1,15 @@
 <script setup>
 const {$supabase} = useNuxtApp()
 const valid_session = ref(false)
-async function check_session(){
+async function check_session(event){
   const {data,error} = await $supabase.auth.getUser()
   if(data.user){
     valid_session.value = true
   }else{
     valid_session.value = false
+  }
+  if (event == 'SIGNED_OUT'){
+    await navigateTo('/',{replace:true})
   }
 }
 onMounted(()=>{check_session()})
