@@ -147,7 +147,7 @@
 import { ref, reactive, onMounted } from 'vue'
 
 //check session validity
-definePageMeta( {middleware: auth} )
+definePageMeta( {middleware: 'auth'} )
 
 // Form state
 const formData = reactive({
