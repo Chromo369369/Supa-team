@@ -7,5 +7,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     ltaAccountKey: '',
     onemapToken:'',
+    public:{
+      supabaseUrl:'',
+      supabaseKey:''
+    }
   },
 })

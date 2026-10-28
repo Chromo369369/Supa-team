@@ -1,4 +1,25 @@
 <script setup>
+const {$supabase} = useNuxtApp()
+const valid_session = ref(false)
+async function check_session(){
+  const {data,error} = await $supabase.auth.getUser()
+  if(data.user){
+    valid_session.value = true
+  }else{
+    valid_session.value = false
+  }
+}
+onMounted(()=>{check_session()})
+async function logout(){
+  await $supabase.auth.signOut()
+  await navigateTo('/',{replace: true})
+  return
+}
+const {data: {subscription} } =  $supabase.auth.onAuthStateChange(check_session)
+
+onUnmounted(() =>
+  subscription.unsubscribe()
+)
 </script>
 
 <template>
@@ -23,8 +44,9 @@
                 <div class="col-6 col-md-3">
                     <h6 class="footer-heading">Account</h6>
                     <ul class="footer-links">
-                        <li><NuxtLink to="/login">Login</NuxtLink></li>
-                        <li><NuxtLink to="/register">Register</NuxtLink></li>
+                        <li><NuxtLink to="/login" v-if="!valid_session">Login</NuxtLink></li>
+                        <li><NuxtLink to="/register" v-if="!valid_session">Register</NuxtLink></li>
+                        <li><NuxtLink to ='/' class="header-link" v-if="valid_session" v-on:click="logout()">Logout</NuxtLink></li>
                     </ul>
                 </div>
             </div>
