@@ -1,10 +1,15 @@
 <script setup>
     import SpinFilters from '~/components/spin/SpinFilters.vue';
     import SpinResults from '~/components/spin/SpinResults.vue';
+    import { filterByAmens } from '~/composables/filterAmens';
     const {$supabase} = useNuxtApp()
     //Check for session validity first
     definePageMeta( {middleware: 'auth' })
-    //Activity type, travel time, 
+    //Defining categories for user preference
+    // what the user picks → which OSM labels count as a match
+    const amenStops = await useFetch('/api/allAmenities')
+    //Activity type, travel time, preferences
+    const preferences = ref([])
     const travelTimeTemp = ref(null)
     const travelTime = ref(60)
     const startingLocation = ref('')
@@ -65,7 +70,9 @@
             }
         }
         possibleStops.value = filterBusStops(arrivals,travelTime.value, allRoutes.data.value,starts)
+        possibleStops.value = filterByAmens(preferences.value,possibleStops.value,amenStops.data.value)
         chosenStop.value = chooseStop(possibleStops.value)
+        console.log(chosenStop.value.destination, amenStops.data.value[chosenStop.value.destination])
         stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
         startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
         } catch (e) {
@@ -89,6 +96,8 @@
                 v-model:travel-time="travelTimeTemp"
                 v-model:starting-location="startingLocation"
                 v-model:selected-place="selectedPlaceTemp"
+                :categories="Object.keys(categories)"
+                v-model:preferences="preferences"
                 :places="locResponse.data.value"
                 @submit="update()"
             />
