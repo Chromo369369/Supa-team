@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from 'vue'
 import GroupLobby from '~/components/group/GroupLobby.vue'
+//Check for session validity
+definePageMeta( {middleware: 'auth' })
 
 const showLobby = ref(false)
 </script>
