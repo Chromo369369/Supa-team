@@ -107,8 +107,8 @@
 <script setup>
 import { ref, reactive } from 'vue'
 
-// Shared trips array (auto-populated from home.vue)
-const savedTrips = useTrips()
+//check session validity
+definePageMeta( {middleware: 'auth'} )
 
 // Inline Editing state
 const editingIndex = ref(null)
