@@ -4,7 +4,100 @@ import GroupLobby from '../components/group/GroupLobby.vue'
 
 definePageMeta( {middleware: 'auth' })
 
+const { $supabase } = useNuxtApp()
 const showLobby = ref(false)
+const currentGroup = ref(null)
+const creatingGroup = ref(false)
+
+async function createGroup() {
+
+  if (creatingGroup.value) {
+    return
+  }
+
+  creatingGroup.value = true
+
+  try {
+    const { data, error } = await $supabase.auth.getUser()
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    if (!data.user) {
+      alert('Please log in first.')
+      return
+    }
+
+    const user = data.user
+    let displayName = 'Member'
+
+    if (user.user_metadata && user.user_metadata.display_name) {
+      displayName = user.user_metadata.display_name
+    }
+
+    const { data: existingGroups, error: e } = await $supabase
+      .from('groups')
+      .select('group_code')
+
+    if (e) {
+      alert(e.message)
+      return
+    }
+
+    let code = 0
+    let codeExists = true
+
+
+    // check if the group_code alr stored in supabase
+    while (codeExists) {
+      code = String(Math.floor(100000 + Math.random() * 900000))
+      codeExists = false
+
+      for (const group of existingGroups) {
+        if (group.group_code === code) {
+          break
+        }
+      }
+    }
+
+    const { error: groupError } = await $supabase
+      .from('groups')
+      .insert({
+        group_code: code,
+        host_id: user.id
+      })
+
+    if (groupError) {
+      alert(groupError.message)
+      return
+    }
+
+    const savedGroup = {
+      group_code: code,
+      host_id: user.id
+    }
+
+    // The host is also a member of the group.
+    const { error: memberError } = await $supabase
+      .from('group_members')
+      .insert({
+        group_code: savedGroup.group_code,
+        user_id: user.id,
+        display_name: displayName
+      })
+
+
+    currentGroup.value = savedGroup
+    showLobby.value = true
+
+  } catch (error) {
+    console.log("some errors in creating a group")
+  } finally {
+    creatingGroup.value = false
+  }
+}
 </script>
 <template>
   <section class="container py-4">
@@ -24,9 +117,10 @@ const showLobby = ref(false)
           <button
             type="button"
             class="group-button host-button"
-            @click="showLobby = true"
+            :disabled="creatingGroup"
+            @click="createGroup"
             >
-            Create a group
+            {{ creatingGroup ? 'Creating group...' : 'Create a group' }}
             </button>
         </div>
       </div>
@@ -53,7 +147,7 @@ const showLobby = ref(false)
         </div>
       </div>
     </div>
-    <GroupLobby v-else @leave="showLobby = false"/>
+    <GroupLobby v-else :group="currentGroup" @leave="showLobby = false"/>
   </section>
 </template>
 

@@ -3,21 +3,29 @@ import { ref, onMounted } from 'vue'
 
 defineEmits(['leave'])
 
+defineProps({
+  group: {
+    type: Object,
+    required: true
+  }
+})
+
 const { $supabase } = useNuxtApp()
-const hostEmail = ref('Loading email...')
-const groupCode = Math.floor(100000 + Math.random() * 900000)
+const hostname = ref('')
+
 
 onMounted(async () => {
   try {
     const { data, error } = await $supabase.auth.getUser()
+    console.log(data.user)
     if (error) throw error
-    if (data.user && data.user.email) {
-      hostEmail.value = data.user.email
+    if (data.user && data.user.user_metadata.display_name) {
+      hostname.value = data.user.user_metadata.display_name
     } else {
-      hostEmail.value = 'Email unavailable'
+      hostname.value = 'host unavailable'
     }
   } catch {
-    hostEmail.value = 'Email unavailable'
+    hostname.value = 'host unavailable'
   }
 })
 </script>
@@ -31,7 +39,7 @@ onMounted(async () => {
         <p>Invite your friends along for your next side quest.</p>
 
         <span class="code-label">Group code</span>
-        <div class="group-code">{{ groupCode }}</div>
+        <div class="group-code">{{ group.group_code }}</div>
 
         <button
           type="button"
@@ -60,7 +68,7 @@ onMounted(async () => {
 
         <div class="member-row">
           <div class="member-details">
-            <strong>{{ hostEmail }}</strong>
+            <strong>{{ hostname }}</strong>
             <span>Ready to explore</span>
           </div>
 
