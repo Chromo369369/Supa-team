@@ -2,9 +2,11 @@
 const travelTime = defineModel('travelTime')
 const startingLocation = defineModel('startingLocation')
 const selectedPlace = defineModel('selectedPlace')
+const preferences = defineModel('preferences')
 
 defineProps({
-    places: Array
+    places: Array,
+    categories: Array
 })
 
 const emit = defineEmits(['submit'])
@@ -35,7 +37,7 @@ function submit() {
 
             <label class="filter-label" for="start-location">Starting location</label>
             <input id="start-location" type="text" class="form-control" v-model="startingLocation" placeholder="Search for a place or address" @input="selectedPlace = ''">
-            <select v-if="startingLocation && places.length && !selectedPlace" class="form-select mt-2" v-model="selectedPlace" size="5" @change="startingLocation = selectedPlace.ADDRESS">
+            <select v-if="startingLocation && places?.length && !selectedPlace" class="form-select mt-2" v-model="selectedPlace" size="5" @change="startingLocation = selectedPlace.ADDRESS">
                 <option v-for="place of places.slice(0,5)" :value="place" :key="place.ADDRESS">
                     {{ place.ADDRESS }}
                 </option>
@@ -43,6 +45,11 @@ function submit() {
 
             <label class="filter-label mt-4" for="travel-time">Max travel time (min)</label>
             <input id="travel-time" type="number" class="form-control" v-model="travelTime" placeholder="e.g. 40">
+            <div v-for="cat of categories" :key="cat" class="form-check">
+              <label :for="cat" class="form-check-label" >{{ cat }}</label>
+              <input type="checkbox" class="form-check-input" :id="cat" :value="cat" v-model="preferences">
+
+            </div>
 
             <button class="btn btn-wb-green w-100 mt-4" @click="submit()" :disabled="!selectedPlace || !travelTime">Submit Preferences</button>
         </div>
