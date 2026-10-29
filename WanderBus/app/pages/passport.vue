@@ -1,134 +1,139 @@
 <template>
   <div class="container-fluid py-4 px-md-5 bg-light min-vh-100">
-    <div class="row">
-      
-      <!-- Left Column: Input Form -->
-      <div class="col-lg-4 col-md-5 mb-4">
-        <div class="card shadow-sm border-0 rounded-4">
-          <div class="card-body p-4">
-            <h3 class="mb-2 fw-bold text-dark">
-              <span class="me-2">📖</span> Log Trip Into Passport
-            </h3>
-            <p class="text-muted small mb-4">
-              Save bus trip memories. Kept private by default or share publicly for collectibles!
-            </p>
-            
-            <form @submit.prevent="saveMemory">
-              
-              <!-- 1. Date -->
-              <div class="mb-3">
-                <label for="tripDate" class="form-label fw-semibold">Date</label>
-                <input type="date" id="tripDate" v-model="formData.date" class="form-control" required />
-              </div>
-
-              <!-- 2. Bus Service Number -->
-              <div class="mb-3">
-                <label for="busService" class="form-label fw-semibold">Bus Service</label>
-                <input type="text" id="busService" v-model="formData.busService" class="form-control" placeholder="e.g. 175" required />
-              </div>
-
-              <!-- 3. Destination / Bus Stop (Searchable Dropdown) -->
-              <div class="mb-3 position-relative">
-                <label for="busStopSearch" class="form-label fw-semibold">Destination / Stop</label>
-                <input 
-                  type="text" 
-                  id="busStopSearch" 
-                  v-model="busStopSearch" 
-                  @input="filterBusStops"
-                  @focus="showDropdown = true"
-                  class="form-control" 
-                  placeholder="Search bus stop name or code..." 
-                  autocomplete="off"
-                  required 
-                />
-                <!-- Autocomplete Dropdown -->
-                <ul v-if="showDropdown && filteredBusStops.length > 0" class="list-group position-absolute w-100 shadow-sm" style="z-index: 1000; max-height: 200px; overflow-y: auto;">
-                  <li 
-                    v-for="stop in filteredBusStops" 
-                    :key="stop.code" 
-                    class="list-group-item list-group-item-action cursor-pointer"
-                    @click="selectBusStop(stop)"
-                  >
-                    {{ stop.name }} ({{ stop.code }})
-                  </li>
-                </ul>
-              </div>
-
-              <!-- 4. Memories / Thoughts -->
-              <div class="mb-3">
-                <label for="memories" class="form-label fw-semibold">Memories / Thoughts</label>
-                <textarea id="memories" v-model="formData.memories" class="form-control" rows="3" placeholder="How was the ride?"></textarea>
-              </div>
-
-              <!-- 5. Photo Link -->
-              <div class="mb-3">
-                <label for="photoLink" class="form-label fw-semibold">Photo Link (Optional)</label>
-                <input type="url" id="photoLink" v-model="formData.photoLink" class="form-control" placeholder="https://..." />
-              </div>
-
-              <!-- 6. Public Sharing Option -->
-              <div class="mb-4 form-check">
-                <input type="checkbox" id="sharePublicly" v-model="formData.isPublic" class="form-check-input" />
-                <label class="form-check-label text-muted small" for="sharePublicly">
-                  Share publicly to app feed to earn collectible
-                </label>
-              </div>
-
-              <!-- 7. Save Button -->
-              <div class="d-grid">
-                <button type="submit" class="btn btn-save text-white fw-bold">Save Memory</button>
-              </div>
-              
-            </form>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right Column: Generated Log Cards -->
-      <div class="col-lg-8 col-md-7">
+    <div class="row justify-content-center">
+      <div class="col-lg-8 col-md-10">
         <h2 class="fw-bold mb-4">Your Digital Passport Entries</h2>
-        
+
         <div class="d-flex flex-column gap-3">
-          
-          <!-- Empty State (Shows if no trips are saved) -->
-          <div v-if="savedTrips.length === 0" class="text-center text-muted p-5 bg-white rounded-4 shadow-sm">
-            <p class="mb-0">No trips logged yet. Fill out the form to save your first memory!</p>
+
+          <!-- Empty state -->
+          <div
+            v-if="savedTrips.length === 0"
+            class="text-center text-muted p-5 bg-white rounded-4 shadow-sm"
+          >
+            <p class="mb-0">No trips logged yet. Spin a side quest on Home to add one!</p>
           </div>
 
-          <!-- Dynamic Render of Saved Trips -->
-          <div 
-            v-for="(trip, index) in savedTrips" 
-            :key="index" 
+          <!-- Log cards -->
+          <div
+            v-for="trip in savedTrips"
+            :key="trip.id"
             class="card shadow-sm border-0 rounded-4 overflow-hidden"
           >
-            <div class="row g-0 h-100">
-              <!-- Left side: Image (Conditional) -->
+            <div class="row g-0">
+              <!-- Photo (only if a link exists) -->
               <div v-if="trip.photoLink" class="col-sm-4 bg-dark">
-                <img :src="trip.photoLink" class="img-fluid w-100 h-100 object-fit-cover" alt="Trip Photo" style="min-height: 200px;" @error="handleImageError" />
+                <img
+                  :src="trip.photoLink"
+                  class="img-fluid w-100 h-100 object-fit-cover"
+                  alt="Trip Photo"
+                  style="min-height: 200px;"
+                  @error="handleImageError"
+                />
               </div>
-              
-              <!-- Right side: Text Content -->
+
+              <!-- Content -->
               <div :class="trip.photoLink ? 'col-sm-8' : 'col-12'">
                 <div class="card-body p-4 d-flex flex-column h-100">
-                  
-                  <!-- Top Row: Badge & Date -->
+
+                  <!-- Top row: bus badge + date -->
                   <div class="d-flex justify-content-between align-items-start mb-2">
                     <span class="badge bg-teal rounded-pill px-3 py-2">Bus {{ trip.busService }}</span>
                     <span class="text-muted small">{{ trip.date }}</span>
                   </div>
-                  
-                  <!-- Main Info -->
-                  <h4 class="card-title fw-bold mb-2">{{ trip.busStop.name }}</h4>
-                  <p class="card-text text-secondary flex-grow-1">{{ trip.memories }}</p>
-                  
-                  <!-- Privacy Status -->
-                  <div class="mt-auto pt-3">
-                    <span 
+
+                  <!-- Main info (bus stop / bus service are not editable) -->
+                  <h4 class="card-title fw-bold mb-2">{{ trip.busStop?.name }}</h4>
+                  <p class="card-text text-secondary">{{ trip.memories }}</p>
+
+                  <!-- Privacy status -->
+                  <div class="mb-3">
+                    <span
                       class="badge px-3 py-2 rounded-pill"
                       :class="trip.isPublic ? 'bg-success' : 'bg-secondary'"
                     >
                       {{ trip.isPublic ? 'Public Shared' : 'Private Keepsake' }}
                     </span>
+                  </div>
+
+                  <!-- Expandable edit form -->
+                  <transition name="expand">
+                    <form
+                      v-if="editingId === trip.id"
+                      class="border rounded-3 p-3 mb-3 bg-light"
+                      @submit.prevent="saveEdit(trip.id)"
+                    >
+                      <div class="mb-3">
+                        <label :for="`date-${trip.id}`" class="form-label fw-semibold">Date</label>
+                        <input
+                          type="date"
+                          :id="`date-${trip.id}`"
+                          v-model="draft.date"
+                          class="form-control"
+                          required
+                        />
+                      </div>
+
+                      <div class="mb-3">
+                        <label :for="`memories-${trip.id}`" class="form-label fw-semibold">Memories / Thoughts</label>
+                        <textarea
+                          :id="`memories-${trip.id}`"
+                          v-model="draft.memories"
+                          class="form-control"
+                          rows="3"
+                          placeholder="How was the ride?"
+                        ></textarea>
+                      </div>
+
+                      <div class="mb-3">
+                        <label :for="`photo-${trip.id}`" class="form-label fw-semibold">Photo Link (Optional)</label>
+                        <input
+                          type="url"
+                          :id="`photo-${trip.id}`"
+                          v-model="draft.photoLink"
+                          class="form-control"
+                          placeholder="https://..."
+                        />
+                      </div>
+
+                      <div class="mb-3 form-check">
+                        <input
+                          type="checkbox"
+                          :id="`public-${trip.id}`"
+                          v-model="draft.isPublic"
+                          class="form-check-input"
+                        />
+                        <label class="form-check-label text-muted small" :for="`public-${trip.id}`">
+                          Share publicly to app feed to earn collectible
+                        </label>
+                      </div>
+
+                      <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-save text-white fw-bold">Save Changes</button>
+                        <button type="button" class="btn btn-outline-secondary rounded-pill px-4" @click="cancelEdit">
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </transition>
+
+                  <!-- Footer actions: Edit (left) / Remove Card (bottom right) -->
+                  <div class="mt-auto pt-2 d-flex justify-content-between align-items-center">
+                    <button
+                      type="button"
+                      class="btn btn-edit"
+                      @click="toggleEdit(trip)"
+                    >
+                      {{ editingId === trip.id ? 'Close' : '✏️ Edit' }}
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn btn-remove"
+                      @click="removeTrip(trip.id)"
+                    >
+                      Remove Card
+                    </button>
                   </div>
 
                 </div>
@@ -138,132 +143,133 @@
 
         </div>
       </div>
-
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
 
-//check session validity
-definePageMeta( {middleware: 'auth'} )
+// check session validity
+definePageMeta({ middleware: 'auth' })
 
-// Form state
-const formData = reactive({
+// Saved log cards.
+// Each trip needs a unique `id`. Trips are added from Home ("side quest"),
+// so load/populate this array from wherever you store them (composable / API).
+// Expected shape:
+// { id, date, busService, busStop: { code, name }, memories, photoLink, isPublic }
+const savedTrips = ref([])
+
+// Edit state
+const editingId = ref(null)
+const draft = reactive({
   date: '',
-  busService: '',
-  busStop: null,
   memories: '',
   photoLink: '',
   isPublic: false
 })
 
-// Array to hold the saved logs
-const savedTrips = ref([])
-
-// Bus Stop Autocomplete State
-const busStopSearch = ref('')
-const showDropdown = ref(false)
-const filteredBusStops = ref([])
-
-// Mock database of Bus Stops
-const allBusStops = ref([
-  { code: '09048', name: 'Orchard Rd' },
-  { code: '05049', name: 'Chinatown Point' },
-  { code: '92049', name: 'East Coast Park' },
-  { code: '80219', name: 'Kallang Stn' },
-  { code: '01012', name: 'Victoria St / Bugis Stn' }
-])
-
-const filterBusStops = () => {
-  if (!busStopSearch.value) {
-    filteredBusStops.value = []
-    showDropdown.value = false
+const toggleEdit = (trip) => {
+  // Clicking Edit on the open card closes it
+  if (editingId.value === trip.id) {
+    cancelEdit()
     return
   }
-  const query = busStopSearch.value.toLowerCase()
-  filteredBusStops.value = allBusStops.value.filter(stop => 
-    stop.name.toLowerCase().includes(query) || stop.code.includes(query)
-  )
-  showDropdown.value = true
+  // Only one card is edited at a time; copy values into the draft
+  editingId.value = trip.id
+  draft.date = trip.date
+  draft.memories = trip.memories
+  draft.photoLink = trip.photoLink
+  draft.isPublic = trip.isPublic
 }
 
-const selectBusStop = (stop) => {
-  formData.busStop = stop
-  busStopSearch.value = `${stop.name} (${stop.code})`
-  showDropdown.value = false
+const cancelEdit = () => {
+  editingId.value = null
+}
+
+const saveEdit = (id) => {
+  const trip = savedTrips.value.find(t => t.id === id)
+  if (!trip) return
+  trip.date = draft.date
+  trip.memories = draft.memories
+  trip.photoLink = draft.photoLink
+  trip.isPublic = draft.isPublic
+  editingId.value = null
+  // TODO: persist the update to your backend here
+}
+
+const removeTrip = (id) => {
+  savedTrips.value = savedTrips.value.filter(t => t.id !== id)
+  if (editingId.value === id) editingId.value = null
+  // TODO: delete from your backend here
 }
 
 const handleImageError = (e) => {
   e.target.style.display = 'none'
 }
-
-// Submit handler
-const saveMemory = () => {
-  if (!formData.busStop) {
-    alert("Please select a valid bus stop from the dropdown list.")
-    return
-  }
-  
-  // Push a clone of the form data to the top of the array
-  savedTrips.value.unshift({
-    date: formData.date,
-    busService: formData.busService,
-    busStop: { ...formData.busStop },
-    memories: formData.memories,
-    photoLink: formData.photoLink,
-    isPublic: formData.isPublic
-  })
-  
-  // Reset Form
-  formData.date = ''
-  formData.busService = ''
-  formData.busStop = null
-  formData.memories = ''
-  formData.photoLink = ''
-  formData.isPublic = false
-  busStopSearch.value = ''
-}
-
-// Close dropdown if user clicks outside
-onMounted(() => {
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.position-relative')) {
-      showDropdown.value = false
-    }
-  })
-})
 </script>
 
 <style scoped>
-.cursor-pointer {
-  cursor: pointer;
-}
-.cursor-pointer:hover {
-  background-color: #f8f9fa;
-}
-
-/* Custom Teal Color to match the reference image */
 .bg-teal {
-  background-color: #1b7a86 !important; 
-}
-.btn-save {
-  background: #0b7a4b;
-  border-color: #0b7a4b;
-  margin-top: auto;
-  padding: 12px 22px;
-  border: none;
-  border-radius: 50px;
-  font-weight: 600;
-  color: #fff;
-}
-.btn-teal:hover {
-  background-color: #145e67;
-  border-color: #145e67;
+  background-color: #1b7a86 !important;
 }
 
 .object-fit-cover {
   object-fit: cover;
+}
+
+/* Green save button (same style as before) */
+.btn-save {
+  background: #0b7a4b;
+  border: none;
+  border-radius: 50px;
+  padding: 10px 22px;
+  font-weight: 600;
+  color: #fff;
+}
+.btn-save:hover {
+  background: #095f3b;
+  color: #fff;
+}
+
+/* Edit button */
+.btn-edit {
+  background: #fff;
+  border: 1px solid #1b7a86;
+  color: #1b7a86;
+  border-radius: 50px;
+  padding: 8px 20px;
+  font-weight: 600;
+}
+.btn-edit:hover {
+  background: #1b7a86;
+  color: #fff;
+}
+
+/* Red remove button, bottom right of card */
+.btn-remove {
+  background: #dc3545;
+  border: none;
+  color: #fff;
+  border-radius: 50px;
+  padding: 8px 20px;
+  font-weight: 600;
+}
+.btn-remove:hover {
+  background: #b02a37;
+  color: #fff;
+}
+
+/* Smooth expand/collapse of the edit form */
+.expand-enter-active,
+.expand-leave-active {
+  transition: all 0.25s ease;
+  max-height: 600px;
+  overflow: hidden;
+}
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+  max-height: 0;
 }
 </style>
