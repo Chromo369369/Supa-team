@@ -38,7 +38,7 @@
 
                   <!-- Top row: bus badge + date -->
                   <div class="d-flex justify-content-between align-items-start mb-2">
-                    <span class="badge bg-teal rounded-pill px-3 py-2">Bus {{ trip.busService }}</span>
+                    <span class="badge bg-teal rounded-pill px-3 py-2">{{ trip.busService ? `Bus ${trip.busService}` : 'Walk' }}</span>
                     <span class="text-muted small">{{ trip.date }}</span>
                   </div>
 
@@ -148,17 +148,16 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 
 // check session validity
 definePageMeta({ middleware: 'auth' })
 
-// Saved log cards.
-// Each trip needs a unique `id`. Trips are added from Home ("side quest"),
-// so load/populate this array from wherever you store them (composable / API).
-// Expected shape:
-// { id, date, busService, busStop: { code, name }, memories, photoLink, isPublic }
-const savedTrips = ref([])
+// Saved log cards: shared state from useTrips(), filled from Home and Supabase.
+const { trips: savedTrips, loadTrips, updateTrip, removeTrip: deleteTrip } = useTrips()
+
+// fetch this user's saved trips from Supabase when the page opens
+onMounted(() => loadTrips())
 
 // Edit state
 const editingId = ref(null)
@@ -187,21 +186,19 @@ const cancelEdit = () => {
   editingId.value = null
 }
 
-const saveEdit = (id) => {
-  const trip = savedTrips.value.find(t => t.id === id)
-  if (!trip) return
-  trip.date = draft.date
-  trip.memories = draft.memories
-  trip.photoLink = draft.photoLink
-  trip.isPublic = draft.isPublic
+const saveEdit = async (id) => {
+  await updateTrip(id, {
+    date: draft.date,
+    memories: draft.memories,
+    photoLink: draft.photoLink,
+    isPublic: draft.isPublic
+  })
   editingId.value = null
-  // TODO: persist the update to your backend here
 }
 
-const removeTrip = (id) => {
-  savedTrips.value = savedTrips.value.filter(t => t.id !== id)
+const removeTrip = async (id) => {
   if (editingId.value === id) editingId.value = null
-  // TODO: delete from your backend here
+  await deleteTrip(id)
 }
 
 const handleImageError = (e) => {
