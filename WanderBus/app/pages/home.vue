@@ -111,6 +111,7 @@
                 :starting-stops="startingStops"
                 @reroll="reroll()"
             />
+            
         </div>
     </section>
 </template>
