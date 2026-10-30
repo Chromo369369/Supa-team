@@ -85,15 +85,45 @@
                         ></textarea>
                       </div>
 
+                      <!-- REPLACE MANUAL PHOTO URL INPUT WITH FILE EXPLORER PICKER -->
                       <div class="mb-3">
-                        <label :for="`photo-${trip.id}`" class="form-label fw-semibold">Photo Link (Optional)</label>
+                        <label class="form-label fw-semibold d-block">Trip Photo</label>
+                        
+                        <!-- Hidden file input triggered via ref -->
                         <input
-                          type="url"
-                          :id="`photo-${trip.id}`"
-                          v-model="draft.photoLink"
-                          class="form-control"
-                          placeholder="https://..."
+                          type="file"
+                          :ref="el => fileInputs[trip.id] = el"
+                          accept="image/*"
+                          class="d-none"
+                          @change="(e) => handleFileSelection(e)"
                         />
+
+                        <!-- Trigger Button -->
+                        <button
+                          type="button"
+                          class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2 py-2"
+                          @click="fileInputs[trip.id]?.click()"
+                        >
+                          <span>📁</span> {{ draft.photoLink ? 'Change Selected Photo' : 'Choose Image from Device' }}
+                        </button>
+
+                        <!-- Preview selected photo inside draft -->
+                        <div v-if="draft.photoLink" class="mt-2 text-center position-relative">
+                          <img
+                            :src="draft.photoLink"
+                            alt="Selected preview"
+                            class="img-thumbnail rounded"
+                            style="max-height: 140px; object-fit: cover;"
+                          />
+                          <button
+                            type="button"
+                            class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 rounded-circle p-1 lh-1"
+                            title="Remove image"
+                            @click="draft.photoLink = ''"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
 
                       <div class="mb-3 form-check">
@@ -132,7 +162,7 @@
                       class="btn btn-remove"
                       @click="removeTrip(trip.id)"
                     >
-                      Remove Card
+                      Remove Memory 
                     </button>
                   </div>
 
@@ -161,6 +191,8 @@ onMounted(() => loadTrips())
 
 // Edit state
 const editingId = ref(null)
+const fileInputs = ref({})
+
 const draft = reactive({
   date: '',
   memories: '',
@@ -178,12 +210,45 @@ const toggleEdit = (trip) => {
   editingId.value = trip.id
   draft.date = trip.date
   draft.memories = trip.memories
-  draft.photoLink = trip.photoLink
+  draft.photoLink = trip.photoLink || ''
   draft.isPublic = trip.isPublic
 }
 
 const cancelEdit = () => {
   editingId.value = null
+}
+
+// Convert chosen file from file explorer into base64 image data URL
+// Automatically resizes and compresses device photos so they fit in Supabase seamlessly
+const handleFileSelection = (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const img = new Image()
+    img.src = e.target.result
+
+    img.onload = () => {
+      // 1. Create a hidden canvas to resize the image
+      const canvas = document.createElement('canvas')
+      const MAX_WIDTH = 600
+      const scaleSize = MAX_WIDTH / img.width
+      
+      canvas.width = MAX_WIDTH
+      canvas.height = img.height * scaleSize
+
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+      // 2. Export as lightweight JPEG (quality 0.7)
+      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7)
+      
+      // 3. Assign compressed image string to draft
+      draft.photoLink = compressedBase64
+    }
+  }
+  reader.readAsDataURL(file)
 }
 
 const saveEdit = async (id) => {
