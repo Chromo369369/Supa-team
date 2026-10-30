@@ -11,7 +11,7 @@ export default defineEventHandler(async(event) => {
             getAddrDetails: 'Y',
             pageNum: 1
         },
-        headers: { Authorization: config.onemapToken, accept: 'application/json'}
+        headers: { Authorization: config.public.onemapToken, accept: 'application/json'}
     })
     return location.results
     
