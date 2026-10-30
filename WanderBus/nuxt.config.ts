@@ -5,11 +5,13 @@ export default defineNuxtConfig({
   ssr: false,
   css: ['bootstrap/dist/css/bootstrap.min.css', '~/assets/css/main.css'],
   runtimeConfig: {
+    // private: server-only (LTA DataMall + OneMap)
+    ltaAccountKey: '',
+    onemapToken: '',
+    // public: exposed to the browser
     public: {
       supabaseUrl: '',
-      supabaseKey: '',
-      onemapToken: '', // Matches NUXT_PUBLIC_ONEMAP_TOKEN
-      ltaKey: ''       // Matches NUXT_PUBLIC_LTA_KEY
+      supabaseKey: ''
     }
   },
 })
