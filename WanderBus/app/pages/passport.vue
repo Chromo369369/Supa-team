@@ -149,6 +149,12 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
+const {$supabase} = useNuxtApp()
+
+//Fetching user trips from supabase
+const userTrips = await $supabase.from('passport_entries').select()
+//userTrips is an array of JavaScript objects. Each object is a user trip defined as the database table's field name: value pairs in supabase table passport_entries
+//TO DO: Refactor (rewrite) this code to display all userTrips
 
 // check session validity
 definePageMeta({ middleware: 'auth' })
