@@ -33,6 +33,26 @@
         stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
         startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
     }
+    async function saveTrip(){
+        try{
+            const {data, error} = await $supabase.from('passport_entries').insert({
+                starting_stop: startDetails.value.Description,
+                end_stop: stopDetails.value.Description,
+                time_taken: Math.ceil(chosenStop.value.chosen.totalTime),
+                bus_taken:chosenStop.value.chosen.bus,
+                starting_location: selectedPlace.value.ADDRESS
+            })
+            if(error){
+                alert(`Could not save your trip: ${error.message}`)
+                return
+            }
+            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
+            
+                
+        }catch(e){
+            console.log(e)
+        }
+    }
     async function update(){
         submitted.value = true
         errorMessage.value = ''
@@ -110,6 +130,10 @@
                 :start-details="startDetails"
                 :starting-stops="startingStops"
                 @reroll="reroll()"
+            />
+            <SpinSubmit
+                :submitted="submitted && !!chosenStop"
+                @saveTrip="saveTrip()"
             />
             
         </div>

@@ -1,5 +1,13 @@
 <script setup lang="ts">
-const props = defineProps({
-    
+const {$supabase} = useNuxtApp()
+defineProps({
+    submitted:Boolean
 })
+defineEmits(['saveTrip'])
+
+
 </script>
+
+<template>
+    <button v-if="submitted" @click="$emit('saveTrip')">Save trip here!</button>
+</template>
