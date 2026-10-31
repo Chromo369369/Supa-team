@@ -3,6 +3,7 @@
     import SpinResults from '~/components/spin/SpinResults.vue';
     import { filterByAmens } from '~/composables/filterAmens';
     const {$supabase} = useNuxtApp()
+    const { addTrip } = useTrips()
     //Check for session validity first
     definePageMeta( {middleware: 'auth' })
     //Defining categories for user preference
@@ -28,10 +29,31 @@
     const startDetails = ref('')
     const errorMessage = ref('')
     const possibleStops = ref({})
-    function reroll(){
+    // Save the current result to the passport (never breaks the spin if it fails)
+    async function logTrip(){
+        try {
+            const c = chosenStop.value
+            const name = stopDetails.value?.Description ?? c.destination
+            const from = startDetails.value?.Description ?? c.chosen.boardAt
+            await addTrip({
+                date: new Date().toLocaleDateString('en-CA'), // yyyy-mm-dd, local time
+                busService: c.chosen.bus ?? '',
+                busStop: { code: c.destination, name },
+                memories: c.chosen.bus
+                    ? `Took bus ${c.chosen.bus} from ${from} for ${c.chosen.stops} stops to ${name}.`
+                    : `Walked to ${name}.`,
+                photoLink: '',
+                isPublic: false
+            })
+        } catch (err) {
+            console.error('[passport] could not log trip', err)
+        }
+    }
+    async function reroll(){
         chosenStop.value = chooseStop(possibleStops.value)
         stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
         startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+        await logTrip()
     }
     async function saveTrip(){
         try{
@@ -95,6 +117,7 @@
         console.log(chosenStop.value.destination, amenStops.data.value[chosenStop.value.destination])
         stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
         startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+        await logTrip()
         } catch (e) {
             errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
         }
@@ -149,7 +172,7 @@
 
 .spin-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 320px 1fr 1fr;
   gap: 32px;
 }
 
