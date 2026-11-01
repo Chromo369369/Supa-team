@@ -1,131 +1,119 @@
 <script setup>
-    import SpinFilters from '~/components/spin/SpinFilters.vue';
-    import SpinResults from '~/components/spin/SpinResults.vue';
-    import { filterByAmens } from '~/composables/filterAmens';
-    const {$supabase} = useNuxtApp()
-    const { addTrip } = useTrips()
-    //Check for session validity first
-    definePageMeta( {middleware: 'auth' })
-    //Defining categories for user preference
-    // what the user picks → which OSM labels count as a match
-    const amenStops = await useFetch('/api/allAmenities')
-    //Activity type, travel time, preferences
-    const preferences = ref([])
-    const travelTimeTemp = ref(null)
-    const travelTime = ref(60)
-    const startingLocation = ref('')
-    const response = await useFetch('/api/allBusStops')
-    const status = ref(response.status)
-    const submitted = ref(false)
-    const selectedPlaceTemp = ref('')
-    const selectedPlace = ref('')
-    const locResponse = await useFetch('/api/onemap',{
-        query: {value: startingLocation}
-    })
-    const startingStops = ref('')
-    const allRoutes = await useFetch('/api/allRoutes')
-    const chosenStop = ref('')
-    const stopDetails = ref('')
-    const startDetails = ref('')
-    const errorMessage = ref('')
-    const possibleStops = ref({})
-    // Save the current result to the passport (never breaks the spin if it fails)
-    async function logTrip(){
-        try {
-            const c = chosenStop.value
-            const name = stopDetails.value?.Description ?? c.destination
-            const from = startDetails.value?.Description ?? c.chosen.boardAt
-            await addTrip({
-                date: new Date().toLocaleDateString('en-CA'), // yyyy-mm-dd, local time
-                busService: c.chosen.bus ?? '',
-                busStop: { code: c.destination, name },
-                memories: c.chosen.bus
-                    ? `Took bus ${c.chosen.bus} from ${from} for ${c.chosen.stops} stops to ${name}.`
-                    : `Walked to ${name}.`,
-                photoLink: '',
-                isPublic: false
-            })
-        } catch (err) {
-            console.error('[passport] could not log trip', err)
-        }
-    }
-    async function reroll(){
-        chosenStop.value = chooseStop(possibleStops.value)
-        stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
-        startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
-        await logTrip()
-    }
-    async function saveTrip(){
-        try{
-            const {data, error} = await $supabase.from('passport_entries').insert({
-                starting_stop: startDetails.value.Description,
-                end_stop: stopDetails.value.Description,
-                time_taken: Math.ceil(chosenStop.value.chosen.totalTime),
-                bus_taken:chosenStop.value.chosen.bus,
-                starting_location: selectedPlace.value.ADDRESS
-            })
-            if(error){
-                alert(`Could not save your trip: ${error.message}`)
-                return
-            }
-            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
-            
-                
-        }catch(e){
-            console.log(e)
-        }
-    }
-    async function update(){
-        submitted.value = true
-        errorMessage.value = ''
-        chosenStop.value = ''
-        travelTime.value = travelTimeTemp.value
-        selectedPlace.value = selectedPlaceTemp.value
+import SpinFilters from '~/components/spin/SpinFilters.vue';
+import SpinResults from '~/components/spin/SpinResults.vue';
+import { filterByAmens } from '~/composables/filterAmens';
 
-        try {
-        let starts = filterStartingBusStops(travelTime.value,response.data.value,selectedPlaceTemp.value)
+const { $supabase } = useNuxtApp()
+
+definePageMeta({ middleware: 'auth' })
+
+const amenStops = await useFetch('/api/allAmenities')
+const preferences = ref([])
+const travelTimeTemp = ref(null)
+const travelTime = ref(60)
+const startingLocation = ref('')
+const response = await useFetch('/api/allBusStops')
+const status = ref(response.status)
+const submitted = ref(false)
+const selectedPlaceTemp = ref('')
+const selectedPlace = ref('')
+const locResponse = await useFetch('/api/onemap', {
+    query: { value: startingLocation }
+})
+const startingStops = ref('')
+const allRoutes = await useFetch('/api/allRoutes')
+const chosenStop = ref('')
+const stopDetails = ref('')
+const startDetails = ref('')
+const errorMessage = ref('')
+const possibleStops = ref({})
+
+// AUTOMATIC CREATE: Saves directly to passport_entries in Supabase
+async function autoSavePassportEntry() {
+    try {
+        if (!chosenStop.value) return
+
+        const { data: { user } } = await $supabase.auth.getUser()
+
+        const payload = {
+            user_id: user?.id || null,
+            starting_location: selectedPlace.value?.ADDRESS || startingLocation.value || 'Selected Start Location',
+            starting_stop: startDetails.value?.Description || chosenStop.value?.chosen?.boardAt || 'Boarding Stop',
+            end_stop: stopDetails.value?.Description || chosenStop.value?.destination || 'Alighting Stop',
+            bus_taken: chosenStop.value?.chosen?.bus ? String(chosenStop.value.chosen.bus) : 'Walk',
+            time_taken: Math.ceil(chosenStop.value?.chosen?.totalTime || 0),
+            entry_time: new Date().toISOString()
+        }
+
+        const { error } = await $supabase
+            .from('passport_entries')
+            .insert(payload)
+
+        if (error) {
+            console.error('[Passport Auto-Save Error]:', error.message)
+            return
+        }
+
+        console.log('Successfully auto-saved spin to passport_entries!')
+    } catch (e) {
+        console.error('[Passport Auto-Save Exception]:', e)
+    }
+}
+
+async function reroll() {
+    chosenStop.value = chooseStop(possibleStops.value)
+    stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
+    startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+    
+    // Auto-save new rerolled quest immediately
+    await autoSavePassportEntry()
+}
+
+async function update() {
+    submitted.value = true
+    errorMessage.value = ''
+    chosenStop.value = ''
+    travelTime.value = travelTimeTemp.value
+    selectedPlace.value = selectedPlaceTemp.value
+
+    try {
+        let starts = filterStartingBusStops(travelTime.value, response.data.value, selectedPlaceTemp.value)
         startingStops.value = starts
         let now = Date.now() / 60000
         let arrivals = {}
-        for (let stopCode of Object.keys(starts)){
-            let busArrivals = await $fetch('/api/busArrivals', {query: {value: stopCode}})
+        for (let stopCode of Object.keys(starts)) {
+            let busArrivals = await $fetch('/api/busArrivals', { query: { value: stopCode } })
             arrivals[stopCode] = {}
             let timeAtStop = now + starts[stopCode]
-            for (let bus of busArrivals.Services){
-                if (!bus.NextBus.EstimatedArrival){
-                    continue
-                }
+            for (let bus of busArrivals.Services || []) {
+                if (!bus.NextBus?.EstimatedArrival) continue
                 let arrival1 = new Date(bus.NextBus.EstimatedArrival).getTime() / 60000
-                let arrival2 = new Date(bus.NextBus2.EstimatedArrival).getTime() / 60000
-                let arrival3 = new Date(bus.NextBus3.EstimatedArrival).getTime() / 60000
-                if (timeAtStop <= arrival1){
-                    arrivals[stopCode][bus.ServiceNo] = Math.ceil((arrival1-now))
-                }
+                let arrival2 = new Date(bus.NextBus2?.EstimatedArrival).getTime() / 60000
+                let arrival3 = new Date(bus.NextBus3?.EstimatedArrival).getTime() / 60000
                 
-                else if (timeAtStop <= arrival2){
-                    arrivals[stopCode][bus.ServiceNo] = Math.ceil((arrival2-now))
-                }
-                
-                else if (timeAtStop <= arrival3){
-                    arrivals[stopCode][bus.ServiceNo] = Math.ceil((arrival3-now))
+                if (timeAtStop <= arrival1) {
+                    arrivals[stopCode][bus.ServiceNo] = Math.ceil((arrival1 - now))
+                } else if (timeAtStop <= arrival2) {
+                    arrivals[stopCode][bus.ServiceNo] = Math.ceil((arrival2 - now))
+                } else if (timeAtStop <= arrival3) {
+                    arrivals[stopCode][bus.ServiceNo] = Math.ceil((arrival3 - now))
                 }
             }
         }
-        possibleStops.value = filterBusStops(arrivals,travelTime.value, allRoutes.data.value,starts)
-        possibleStops.value = filterByAmens(preferences.value,possibleStops.value,amenStops.data.value)
+        possibleStops.value = filterBusStops(arrivals, travelTime.value, allRoutes.data.value, starts)
+        possibleStops.value = filterByAmens(preferences.value, possibleStops.value, amenStops.data.value)
         chosenStop.value = chooseStop(possibleStops.value)
-        console.log(chosenStop.value.destination, amenStops.data.value[chosenStop.value.destination])
         stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
         startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
-        await logTrip()
-        } catch (e) {
-            errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
-        }
 
-        return
+        // Auto-save spin immediately upon successful generation
+        await autoSavePassportEntry()
+
+    } catch (e) {
+        errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
     }
+}
 </script>
-
 
 <template>
     <section class="container py-4 spin-page">
@@ -154,11 +142,6 @@
                 :starting-stops="startingStops"
                 @reroll="reroll()"
             />
-            <SpinSubmit
-                :submitted="submitted && !!chosenStop"
-                @saveTrip="saveTrip()"
-            />
-            
         </div>
     </section>
 </template>
@@ -170,13 +153,13 @@
   color: #141a33;
 }
 
+/* Expanded to 2 columns (340px for filters, remaining width for results) */
 .spin-layout {
   display: grid;
-  grid-template-columns: 320px 1fr 1fr;
+  grid-template-columns: 340px 1fr;
   gap: 32px;
 }
 
-/* small screens: one column, filters become a bar pinned to the bottom */
 @media (max-width: 991.98px) {
   .spin-layout {
     grid-template-columns: 1fr;
