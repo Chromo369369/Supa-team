@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 
-defineEmits(['leave'])
+const emit = defineEmits(['leave'])
 
 const props = defineProps({
   group: {
@@ -16,12 +16,16 @@ const isHost = ref(false)
 const groupMembers = ref([])
 const loadingMembers = ref(true)
 const membersError = ref('')
+const currentUserId = ref('')
+const leavingGroup = ref(false)
 
 
 onMounted(async () => {
   try {
     const { data: userData, error: userError } = await $supabase.auth.getUser()
     if (userError) throw userError
+
+    currentUserId.value = userData.user.id
 
     const { data: groupDetails, error: groupError } = await $supabase
       .from('groups')
@@ -56,11 +60,50 @@ onMounted(async () => {
       member => member.user_id != groupDetails.host_id
     )
   } catch {
-    membersError.value = 'Unable to load group members.'
+    membersError.value = 'Unable to load group members'
   } finally {
     loadingMembers.value = false
   }
 })
+
+async function leaveGroup() {
+  if (leavingGroup.value) return
+
+  leavingGroup.value = true
+
+  try {
+    if (isHost.value) {
+      const { error: membersDeleteError } = await $supabase
+        .from('group_members')
+        .delete()
+        .eq('group_code', props.group.group_code)
+
+      if (membersDeleteError) throw membersDeleteError
+
+      const { error: groupDeleteError } = await $supabase
+        .from('groups')
+        .delete()
+        .eq('group_code', props.group.group_code)
+
+      if (groupDeleteError) throw groupDeleteError
+
+    } else {
+      const { error: memberDeleteError } = await $supabase
+        .from('group_members')
+        .delete()
+        .eq('group_code', props.group.group_code)
+        .eq('user_id', currentUserId.value)
+
+      if (memberDeleteError) throw memberDeleteError
+    }
+
+    emit('leave')
+  } catch (error) {
+    alert(error.message)
+  } finally {
+    leavingGroup.value = false
+  }
+}
 </script>
 
 <template>
@@ -77,7 +120,8 @@ onMounted(async () => {
         <button
           type="button"
           class="lobby-button dark-button"
-          @click="$emit('leave')"
+          :disabled="leavingGroup || loadingMembers"
+          @click="leaveGroup"
         >
           Leave group
         </button>

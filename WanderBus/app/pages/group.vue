@@ -183,7 +183,7 @@ async function joinGroup() {
     if (error) throw error
 
     if (!group) {
-      joinError.value = 'Group not found'
+      joinError.value = 'Group not found.'
       return
     }
 
@@ -217,6 +217,14 @@ function openGroup() {
   }
 
   joinGroup()
+}
+
+function resetEverything() {
+  showLobby.value = false
+  currentGroup.value = null
+  alreadyInGroup.value = false
+  groupCode.value = ''
+  joinError.value = ''
 }
 
 
@@ -270,7 +278,7 @@ function openGroup() {
             placeholder="Enter Group code"
           >
             <br>
-          <p v-if="joinError" id="join-error" class="text-danger" role="alert">
+          <p v-if="joinError" id="join-error" class="text-danger" >
             {{ joinError }}
           </p>
           <p v-if="alreadyInGroup" class="text-muted">
@@ -287,7 +295,7 @@ function openGroup() {
         </div>
       </div>
     </div>
-    <GroupLobby v-else :group="currentGroup" @leave="showLobby = false"/>
+    <GroupLobby v-else :group="currentGroup" @leave="resetEverything"/>
   </section>
 </template>
 

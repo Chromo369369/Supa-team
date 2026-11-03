@@ -44,7 +44,7 @@ onUnmounted(() =>
                 <div id="main-nav" class="collapse navbar-collapse justify-content-end">
                     <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3 gap-md-4 py-3 py-md-0">
                         <NuxtLink to="/" class="header-link">Home</NuxtLink>
-                        <NuxtLink to="/group" class="header-link" v-if="valid_session">Group_Test</NuxtLink>
+                        <NuxtLink to="/group" class="header-link" v-if="valid_session">Group</NuxtLink>
                         <NuxtLink to="/login" class="header-login" v-if="!valid_session">Login</NuxtLink>
                         <NuxtLink to="/passport" class="header-passport">Passport</NuxtLink>
                         <NuxtLink to="/register" class="btn btn-wb-dark" v-if="!valid_session">Register</NuxtLink>
