@@ -31,3 +31,9 @@ export function placeStyle(subcategory: string) {
     const section = placeSections[placeSubcategories[subcategory]!.section]!
     return { label: info.label, icon: info.icon, colour: section.colour, tint: section.tint }
 }
+
+// feature 3 pins. Square pins on the map so they don't get mixed up with the round place pins
+export const activityStyles: Record<string, { label: string, icon: string, colour: string, tint: string }> = {
+    signpost:  { label: 'Signpost',  icon: '🪧', colour: '#f5a623', tint: '#fdf3d7' },
+    challenge: { label: 'Challenge', icon: '🏆', colour: '#2d6fd3', tint: '#e8f0fc' },
+}

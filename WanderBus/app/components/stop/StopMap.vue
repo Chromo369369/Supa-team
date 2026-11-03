@@ -6,10 +6,12 @@ const props = defineProps({
     stop: Object,       // { code, name, road, lat, lon }
     radius: Number,     // metres
     places: Array,      // places currently shown (already filtered by category)
-    selectedId: String
+    activities: { type: Array, default: () => [] },   // signposts/challenges currently shown (feature 3)
+    draft: Object,      // { kind, lat, lon } while leaving a signpost/challenge, else null
+    selectedId: String  // a place id or an activity key ('signpost:12')
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'drop', 'drop-outside', 'move-draft'])
 
 const waves = 12        // the sweep is split into 12 slices of 30 degrees
 const sweepMs = 2000
@@ -18,7 +20,9 @@ const mapEl = ref(null)
 const sweeping = ref(false)
 let map = null
 let placeLayer = null
-let markers = {}    // place id -> leaflet marker
+let activityLayer = null
+let draftMarker = null
+let markers = {}    // place id / activity key -> leaflet marker
 let sweepTimer = null
 
 // which slice of the sweep a place is in, from its compass bearing (0 = north, clockwise)
@@ -40,9 +44,36 @@ function pinIcon(place, selected) {
     })
 }
 
+function activityIcon(activity, selected) {
+    const style = activityStyles[activity.kind]
+    const size = selected ? 44 : 32
+    return L.divIcon({
+        className: '',
+        html: `<div class="activity-pin ${selected ? 'is-selected' : ''}" style="--pin:${style.colour}">${style.icon}</div>`,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2]
+    })
+}
+
+function isInside(latlng) {
+    return distanceInMetres(props.stop.lat, props.stop.lon, latlng.lat, latlng.lng) <= props.radius
+}
+
 function drawPlaces() {
     placeLayer.clearLayers()
+    activityLayer.clearLayers()
     markers = {}
+    for (let activity of props.activities) {
+        let selected = activity.key === props.selectedId
+        let marker = L.marker([activity.lat, activity.lon], {
+            icon: activityIcon(activity, selected),
+            title: activity.kind == 'signpost' ? activity.note : activity.title,
+            zIndexOffset: selected ? 1000 : 500
+        })
+        marker.on('click', () => emit('select', activity.key))
+        marker.addTo(activityLayer)
+        markers[activity.key] = marker
+    }
     for (let place of props.places) {
         let selected = place.id === props.selectedId
         let marker = L.marker([place.lat, place.lon], {
@@ -54,6 +85,36 @@ function drawPlaces() {
         marker.addTo(placeLayer)
         markers[place.id] = marker
     }
+}
+
+// the "Leave a signpost" / "Set a challenge" button was dropped on the map
+function onDrop(event) {
+    let kind = event.dataTransfer.getData('text/plain')
+    if (kind != 'signpost' && kind != 'challenge') return
+    let latlng = map.mouseEventToLatLng(event)
+    if (isInside(latlng)) emit('drop', kind, latlng.lat, latlng.lng)
+    else emit('drop-outside')
+}
+
+// the pin being placed, draggable until it's saved. Dragged outside the circle = snaps back
+function drawDraft() {
+    if (draftMarker) draftMarker.remove()
+    draftMarker = null
+    if (!props.draft) return
+    draftMarker = L.marker([props.draft.lat, props.draft.lon], {
+        icon: activityIcon(props.draft, true),
+        draggable: true,
+        zIndexOffset: 3000
+    }).addTo(map)
+    draftMarker.on('dragend', () => {
+        let latlng = draftMarker.getLatLng()
+        if (isInside(latlng)) {
+            emit('move-draft', latlng.lat, latlng.lng)
+        } else {
+            draftMarker.setLatLng([props.draft.lat, props.draft.lon])
+            emit('drop-outside')
+        }
+    })
 }
 
 // a radar sweep that goes round the 1 km circle once, each pin pops in as the sweep passes it
@@ -94,20 +155,29 @@ onMounted(() => {
     map.fitBounds(L.latLng(props.stop.lat, props.stop.lon).toBounds(props.radius * 2), { padding: [16, 16] })
 
     placeLayer = L.layerGroup().addTo(map)
+    activityLayer = L.layerGroup().addTo(map)
     drawPlaces()
+    drawDraft()
     runSweep()
 })
 
-watch(() => props.places, drawPlaces)
+watch(() => [props.places, props.activities], drawPlaces)
+watch(() => props.draft, drawDraft)   // a new draft or it was closed. Dragging only changes its lat/lon, so it isn't redrawn
 
 watch(() => props.selectedId, (newId, oldId) => {
     for (let id of [oldId, newId]) {
         let place = props.places.find(p => p.id === id)
-        if (!place) continue
-        markers[id].setIcon(pinIcon(place, id === newId))
-        markers[id].setZIndexOffset(id === newId ? 1000 : 0)
+        let activity = props.activities.find(a => a.key === id)
+        if (place) {
+            markers[id].setIcon(pinIcon(place, id === newId))
+            markers[id].setZIndexOffset(id === newId ? 1000 : 0)
+        }
+        if (activity) {
+            markers[id].setIcon(activityIcon(activity, id === newId))
+            markers[id].setZIndexOffset(id === newId ? 1000 : 500)
+        }
     }
-    if (newId) map.panTo(markers[newId].getLatLng())
+    if (newId && markers[newId]) map.panTo(markers[newId].getLatLng())
 })
 
 onBeforeUnmount(() => {
@@ -117,7 +187,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="stop-map-wrap">
+    <div class="stop-map-wrap" @dragover.prevent @drop.prevent="onDrop">
         <div class="stop-map-box" :class="{ 'is-sweeping': sweeping }">
             <div ref="mapEl" class="stop-map"></div>
             <div v-if="sweeping" class="map-sweep" aria-hidden="true"><span class="sweep-disc"></span></div>
@@ -125,6 +195,9 @@ onBeforeUnmount(() => {
         <ul class="map-legend">
             <li v-for="(style, key) in placeSections" :key="key">
                 <span class="legend-dot" :style="{ background: style.colour }"></span>{{ style.label }}
+            </li>
+            <li v-for="(style, key) in activityStyles" :key="key">
+                <span class="legend-dot legend-activity" :style="{ background: style.colour }"></span>{{ style.label }}
             </li>
             <li><span class="legend-dot legend-stop"></span>Bus stop</li>
         </ul>
@@ -163,6 +236,25 @@ onBeforeUnmount(() => {
 .stop-map :deep(.place-pin.is-selected) {
   font-size: 20px;
   box-shadow: 0 0 0 4px #f5a623, 0 2px 8px rgba(20, 26, 51, 0.4);
+}
+
+.stop-map :deep(.activity-pin) {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--pin);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(20, 26, 51, 0.35);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.stop-map :deep(.activity-pin.is-selected) {
+  font-size: 20px;
+  box-shadow: 0 0 0 4px #141a33, 0 2px 8px rgba(20, 26, 51, 0.4);
 }
 
 .stop-map :deep(.stop-pin) {
@@ -251,6 +343,10 @@ onBeforeUnmount(() => {
   height: 10px;
   border-radius: 50%;
   margin-right: 6px;
+}
+
+.legend-activity {
+  border-radius: 3px;
 }
 
 .legend-stop {
