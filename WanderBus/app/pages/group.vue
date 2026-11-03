@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import GroupLobby from '../components/group/GroupLobby.vue'
 
 definePageMeta( {middleware: 'auth' })
@@ -8,10 +8,52 @@ const { $supabase } = useNuxtApp()
 const showLobby = ref(false)
 const currentGroup = ref(null)
 const creatingGroup = ref(false)
+const groupCode = ref('')
+const joiningGroup = ref(false)
+const joinError = ref('')
+const alreadyInGroup = ref(false)
+const checkingMembership = ref(true)
 
+onMounted(async () => {
+  try {
+    const { data, error } = await $supabase.auth.getUser()
+    if (error) throw error
+
+    if (!data.user) return
+
+    const { data: membership, error: membershipError } = await $supabase
+      .from('group_members')
+      .select('group_code')
+      .eq('user_id', data.user.id)
+      .maybeSingle()
+
+    if (membershipError) throw membershipError
+
+    if(membership){
+      alreadyInGroup.value = true;
+    }
+    else{
+      alreadyInGroup.value = false;
+    }
+
+    currentGroup.value = membership
+  } catch (error) {
+    console.log(error)
+    joinError.value = 'Unable to check your current group.'
+  } finally {
+    checkingMembership.value = false
+  }
+})
+
+// create group
 async function createGroup() {
 
-  if (creatingGroup.value) {
+  if (
+    creatingGroup.value ||
+    joiningGroup.value ||
+    checkingMembership.value ||
+    alreadyInGroup.value
+  ) {
     return
   }
 
@@ -26,12 +68,12 @@ async function createGroup() {
     }
 
     if (!data.user) {
-      alert('Please log in first.')
+      alert('Please log in first')
       return
     }
 
     const user = data.user
-    let displayName = 'Member'
+    let displayName = null
 
     if (user.user_metadata && user.user_metadata.display_name) {
       displayName = user.user_metadata.display_name
@@ -55,11 +97,17 @@ async function createGroup() {
       code = String(Math.floor(100000 + Math.random() * 900000))
       codeExists = false
 
-      for (const group of existingGroups) {
-        if (group.group_code === code) {
+      for (const g of existingGroups) {
+        if (g.group_code == code) {
+          codeExists = true
           break
         }
       }
+    }
+
+    const savedGroup = {
+      group_code: code,
+      host_id: user.id
     }
 
     const { error: groupError } = await $supabase
@@ -74,30 +122,104 @@ async function createGroup() {
       return
     }
 
-    const savedGroup = {
-      group_code: code,
-      host_id: user.id
-    }
-
-    // The host is also a member of the group.
+    // pass the host as a member to the db
     const { error: memberError } = await $supabase
       .from('group_members')
       .insert({
-        group_code: savedGroup.group_code,
+        group_code: code,
         user_id: user.id,
         display_name: displayName
       })
 
+    if (memberError) {
+      alert(memberError.message)
+      return
+    }
 
     currentGroup.value = savedGroup
+    alreadyInGroup.value = true
     showLobby.value = true
 
   } catch (error) {
-    console.log("some errors in creating a group")
+    console.log("something wrong in creating a group")
   } finally {
     creatingGroup.value = false
   }
 }
+
+// join the group by the 6 digit code
+async function joinGroup() {
+  if (
+    joiningGroup.value ||
+    creatingGroup.value ||
+    checkingMembership.value
+  ) return
+
+  joinError.value = ''
+  const code = groupCode.value.trim()
+
+  if (code.length != 6) {
+    joinError.value = 'Please enter valid group code'
+    return
+  }
+
+  joiningGroup.value = true
+
+  try {
+    const { data: authData, error: authError } = await $supabase.auth.getUser()
+    if (authError) throw authError
+
+    if (!authData.user) {
+      joinError.value = 'Please log in first'
+      return
+    }
+
+    const { data: group, error } = await $supabase
+      .from('groups')
+      .select('group_code')
+      .eq('group_code', code)
+      .maybeSingle()
+
+    if (error) throw error
+
+    if (!group) {
+      joinError.value = 'Group not found'
+      return
+    }
+
+    const user = authData.user
+    const displayName = user.user_metadata.display_name
+    const { error: memberError } = await $supabase
+      .from('group_members')
+      .insert({
+        group_code: group.group_code,
+        user_id: user.id,
+        display_name: displayName
+      })
+
+    if (memberError) throw memberError
+
+    currentGroup.value = group
+    alreadyInGroup.value = true
+    showLobby.value = true
+  } catch {
+    
+    joinError.value = 'Unable to open this group'
+  } finally {
+    joiningGroup.value = false
+  }
+}
+
+function openGroup() {
+  if (alreadyInGroup.value && currentGroup.value) {
+    showLobby.value = true
+    return
+  }
+
+  joinGroup()
+}
+
+
 </script>
 <template>
   <section class="container py-4">
@@ -117,7 +239,7 @@ async function createGroup() {
           <button
             type="button"
             class="group-button host-button"
-            :disabled="creatingGroup"
+            :disabled="creatingGroup || joiningGroup || checkingMembership || alreadyInGroup"
             @click="createGroup"
             >
             {{ creatingGroup ? 'Creating group...' : 'Create a group' }}
@@ -136,13 +258,31 @@ async function createGroup() {
           <label for="Group-code" class="code-label">Group code</label>
           <input
             id="Group-code"
+            v-model="groupCode"
+            inputmode="numeric"
+            maxlength="6"
+            :disabled="joiningGroup || creatingGroup || checkingMembership || alreadyInGroup"
+            :aria-invalid="joinError != ''"
+            :aria-describedby="joinError ? 'join-error' : undefined"
+            @keyup.enter="joinGroup"
             type="text"
             class="form-control group-input"
             placeholder="Enter Group code"
           >
             <br>
-          <button type="button" class="group-button join-button">
-            Join a group
+          <p v-if="joinError" id="join-error" class="text-danger" role="alert">
+            {{ joinError }}
+          </p>
+          <p v-if="alreadyInGroup" class="text-muted">
+            You are already in a group.
+          </p>
+          <button
+            type="button"
+            class="group-button join-button"
+            :disabled="joiningGroup || creatingGroup || checkingMembership"
+            @click="openGroup"
+          >
+            {{ alreadyInGroup ? 'View your group' : 'Join a group' }}
           </button>
         </div>
       </div>
@@ -209,6 +349,10 @@ async function createGroup() {
   border-radius: 50px;
   font-weight: 600;
   color: #fff;
+}
+
+.group-button:disabled {
+  opacity: 0.55;
 }
 
 .host-button {
