@@ -69,7 +69,26 @@ async function reroll() {
     await autoSavePassportEntry()
 }
 
-async function update() {
+// Helper to auto-log the trip into Passport
+function autoLogTrip() {
+  if (chosenStop.value && stopDetails.value) {
+    const today = new Date().toISOString().split('T')[0]
+    savedTrips.value.unshift({
+      id: Date.now(),
+      date: today,
+      busService: chosenStop.value.chosen?.service || 'N/A',
+      busStop: {
+        code: stopDetails.value.BusStopCode,
+        name: stopDetails.value.Description || stopDetails.value.RoadName || stopDetails.value.BusStopCode
+      },
+      memories: '',
+      photoLink: '',
+      isPublic: false
+    })
+  }
+}
+
+async function update(){
     submitted.value = true
     errorMessage.value = ''
     chosenStop.value = ''
@@ -106,13 +125,31 @@ async function update() {
         stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
         startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
 
-        // Auto-save spin immediately upon successful generation
-        await autoSavePassportEntry()
 
     } catch (e) {
         errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
     }
 }
+async function saveTrip(){
+        try{
+            const {data, error} = await $supabase.from('passport_entries').insert({
+                starting_stop: startDetails.value.Description,
+                end_stop: stopDetails.value.Description,
+                time_taken: Math.ceil(chosenStop.value.chosen.totalTime),
+                bus_taken:chosenStop.value.chosen.bus,
+                starting_location: selectedPlace.value.ADDRESS
+            })
+            if(error){
+                alert(`Could not save your trip: ${error.message}`)
+                return
+            }
+            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
+            
+                
+        }catch(e){
+            console.log(e)
+        }
+    }
 </script>
 
 <template>
@@ -141,6 +178,10 @@ async function update() {
                 :start-details="startDetails"
                 :starting-stops="startingStops"
                 @reroll="reroll()"
+            />
+            <SpinSubmit
+                :submitted="submitted && !!chosenStop"
+                @saveTrip="saveTrip()"
             />
         </div>
     </section>
