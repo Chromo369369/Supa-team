@@ -28,37 +28,6 @@ const startDetails = ref('')
 const errorMessage = ref('')
 const possibleStops = ref({})
 
-// AUTOMATIC CREATE: Saves directly to passport_entries in Supabase
-async function autoSavePassportEntry() {
-    try {
-        if (!chosenStop.value) return
-
-        const { data: { user } } = await $supabase.auth.getUser()
-
-        const payload = {
-            user_id: user?.id || null,
-            starting_location: selectedPlace.value?.ADDRESS || startingLocation.value || 'Selected Start Location',
-            starting_stop: startDetails.value?.Description || chosenStop.value?.chosen?.boardAt || 'Boarding Stop',
-            end_stop: stopDetails.value?.Description || chosenStop.value?.destination || 'Alighting Stop',
-            bus_taken: chosenStop.value?.chosen?.bus ? String(chosenStop.value.chosen.bus) : 'Walk',
-            time_taken: Math.ceil(chosenStop.value?.chosen?.totalTime || 0),
-            entry_time: new Date().toISOString()
-        }
-
-        const { error } = await $supabase
-            .from('passport_entries')
-            .insert(payload)
-
-        if (error) {
-            console.error('[Passport Auto-Save Error]:', error.message)
-            return
-        }
-
-        console.log('Successfully auto-saved spin to passport_entries!')
-    } catch (e) {
-        console.error('[Passport Auto-Save Exception]:', e)
-    }
-}
 
 async function reroll() {
     chosenStop.value = chooseStop(possibleStops.value)
@@ -67,25 +36,6 @@ async function reroll() {
     
     // Auto-save new rerolled quest immediately
     await autoSavePassportEntry()
-}
-
-// Helper to auto-log the trip into Passport
-function autoLogTrip() {
-  if (chosenStop.value && stopDetails.value) {
-    const today = new Date().toISOString().split('T')[0]
-    savedTrips.value.unshift({
-      id: Date.now(),
-      date: today,
-      busService: chosenStop.value.chosen?.service || 'N/A',
-      busStop: {
-        code: stopDetails.value.BusStopCode,
-        name: stopDetails.value.Description || stopDetails.value.RoadName || stopDetails.value.BusStopCode
-      },
-      memories: '',
-      photoLink: '',
-      isPublic: false
-    })
-  }
 }
 
 async function update(){
