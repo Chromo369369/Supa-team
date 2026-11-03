@@ -81,8 +81,11 @@ async function update() {
         startingStops.value = starts
         let now = Date.now() / 60000
         let arrivals = {}
-        for (let stopCode of Object.keys(starts)) {
-            let busArrivals = await $fetch('/api/busArrivals', { query: { value: stopCode } })
+        // ask LTA for every starting stop at the same time instead of one by one (40 stops took ~10s in a row)
+        let stopCodes = Object.keys(starts)
+        let allArrivals = await Promise.all(stopCodes.map(stopCode => $fetch('/api/busArrivals', { query: { value: stopCode } })))
+        for (let [index, stopCode] of stopCodes.entries()) {
+            let busArrivals = allArrivals[index]
             arrivals[stopCode] = {}
             let timeAtStop = now + starts[stopCode]
             for (let bus of busArrivals.Services || []) {
@@ -140,6 +143,7 @@ async function update() {
                 :stop-details="stopDetails"
                 :start-details="startDetails"
                 :starting-stops="startingStops"
+                :preferences="preferences"
                 @reroll="reroll()"
             />
         </div>

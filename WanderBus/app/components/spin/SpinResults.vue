@@ -8,7 +8,8 @@ const props = defineProps({
     chosenStop: [Object, String],
     stopDetails: [Object, String],
     startDetails: [Object, String],
-    startingStops: [Object, String]
+    startingStops: [Object, String],
+    preferences: { type: Array, default: () => [] }
 })
 
 defineEmits(['reroll'])
@@ -56,6 +57,13 @@ const boardLines = computed(() => {
                         :area="stopDetails.RoadName"
                         :stops="chosenStop.chosen.stops"
                     />
+
+                    <NuxtLink
+                        :to="{ path: `/stop/${chosenStop.destination}`, query: { prefer: preferences.join(',') } }"
+                        class="btn btn-explore mt-3"
+                    >
+                        📍 See places around this stop
+                    </NuxtLink>
                 </div>
 
                 <div class="col-12">
@@ -147,5 +155,18 @@ const boardLines = computed(() => {
 
 .btn-wb-outline:hover {
   background: #f1f2f6;
+}
+
+.btn-explore {
+  background: #0b7a4b;
+  color: #fff;
+  border-radius: 50px;
+  padding: 12px 28px;
+  font-weight: 600;
+}
+
+.btn-explore:hover {
+  background: #096640;
+  color: #fff;
 }
 </style>
