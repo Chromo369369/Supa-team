@@ -1,55 +1,158 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
-const challenges = ref([
-    {
-        id: 1,
-        stopId: '64009',
-        username: 'Explorer123',
-        title: 'Photo Hunt',
-        description: 'Take a photo of something red near this bus stop!',
-        completed: false
-    },
-    {
-        id: 2,
-        stopId: '99999',
-        username: 'BusAdventurer',
-        title: 'Hidden Gem',
-        description: 'Find a café or interesting shop nearby!',
-        completed: false
-    }
-])
-
-const newTitle = ref('')
-const newDescription = ref('')
+// 1. Define props first
 const props = defineProps({
     stopId: {
         type: String,
         required: true
     }
 })
+
+// 2. Your existing sample data
+const challenges = ref([])
+
+const newTitle = ref('')
+const newDescription = ref('')
+
+// 3. Supabase connection
+const { $supabase } = useNuxtApp()
+
+// 4. Fetch challenges
+async function fetchChallenges() {
+    // Get challenges for the current bus stop
+    const { data: challengeData, error: challengeError } = await $supabase
+        .from('challenges')
+        .select('*')
+        .eq('stop_id', props.stopId)
+        .order('created_at', { ascending: false })
+
+    if (challengeError) {
+        console.error('Error fetching challenges:', challengeError.message)
+        return
+    }
+
+    // Get the currently logged-in user
+    const { data: { user }, error: userError } =
+        await $supabase.auth.getUser()
+
+    if (userError) {
+        console.error('Error getting user:', userError.message)
+        return
+    }
+
+    // Find which challenges this user has completed
+    let completedIds = []
+
+    if (user) {
+        const { data: completionData, error: completionError } =
+            await $supabase
+                .from('challenge_completions')
+                .select('challenge_id')
+                .eq('user_id', user.id)
+
+        if (completionError) {
+            console.error('Error fetching completions:', completionError.message)
+            return
+        }
+
+        completedIds = completionData.map(item => item.challenge_id)
+    }
+
+    // Combine challenges with the user's completion status
+    challenges.value = challengeData.map(challenge => ({
+        id: challenge.id,
+        stopId: challenge.stop_id,
+        username: 'User',
+        title: challenge.title,
+        description: challenge.description,
+        completed: completedIds.includes(challenge.id)
+    }))
+}
+
+// 5. Watch for changes in the bus stop
+watch(
+    () => props.stopId,
+    () => {
+        fetchChallenges()
+    },
+    { immediate: true }
+)
+
 const filteredChallenges = computed(() => {
     return challenges.value.filter(
         challenge => challenge.stopId === props.stopId
     )
 })
 
-function addChallenge() {
+async function addChallenge() {
     if (!newTitle.value.trim() || !newDescription.value.trim()) {
         return
     }
 
-    challenges.value.unshift({
-        id: Date.now(),
-        stopId: props.stopId,
-        username: 'You',
-        title: newTitle.value.trim(),
-        description: newDescription.value.trim(),
-        completed: false
-    })
+    // Get the currently logged-in user
+    const { data: { user }, error: userError } =
+        await $supabase.auth.getUser()
 
+    if (userError || !user) {
+        alert('Please log in to create a challenge!')
+        return
+    }
+
+    // Save challenge to Supabase
+    const { error } = await $supabase
+        .from('challenges')
+        .insert({
+            user_id: user.id,
+            stop_id: props.stopId,
+            title: newTitle.value.trim(),
+            description: newDescription.value.trim()
+        })
+
+    if (error) {
+        console.error('Error creating challenge:', error.message)
+        alert('Failed to create challenge!')
+        return
+    }
+
+    // Refresh the challenges list
+    await fetchChallenges()
+
+    // Clear the form
     newTitle.value = ''
     newDescription.value = ''
+
+    alert('Challenge created successfully!')
+}
+
+async function completeChallenge(challenge) {
+    // Get the logged-in user
+    const { data: { user }, error: userError } =
+        await $supabase.auth.getUser()
+
+    if (userError || !user) {
+        alert('Please log in to complete challenges!')
+        return
+    }
+
+    // Save completion to Supabase
+    const { error } = await $supabase
+        .from('challenge_completions')
+        .insert({
+            challenge_id: challenge.id,
+            user_id: user.id
+        })
+
+    if (error) {
+        console.error('Error completing challenge:', error.message)
+        alert('Failed to complete challenge!')
+        return
+    }
+
+    // Update the button
+    challenge.completed = true
+
+    alert('Challenge completed!')
 }
 
 </script>
@@ -118,7 +221,7 @@ function addChallenge() {
                         <button
                             class="btn btn-success"
                             :disabled="challenge.completed"
-                            @click="challenge.completed = true"
+                            @click="completeChallenge(challenge)"
                         >
                             {{ challenge.completed ? 'Completed ✓' : 'Mark as Completed' }}
                         </button>
