@@ -1,22 +1,35 @@
 <script setup>
 import { ref, onUnmounted, computed } from 'vue'
 
-const logs = ref([
-    {
-        id: 1,
-        stopId: '64009',
-        username: 'Explorer123',
-        rating: 5,
-        note: 'Found a really nice café nearby!'
-    },
-    {
-        id: 2,
-        stopId: '99999',
-        username: 'BusAdventurer',
-        rating: 4,
-        note: 'Nice neighbourhood to explore.'
-    }
-])
+const { $supabase } = useNuxtApp()
+
+async function fetchLogs() {
+  const { data, error } = await $supabase
+    .from('stop_logs')
+    .select('*')
+    .eq('stop_id', props.stopId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching logs:', error.message)
+    return
+  }
+
+  logs.value = data.map(log => ({
+    id: log.id,
+    stopId: log.stop_id,
+    username: 'User',
+    rating: log.rating,
+    note: log.note,
+    photo: log.photo_url
+}))
+}
+
+onMounted(() => {
+  fetchLogs()
+})
+
+const logs = ref([])
 
 const newNote = ref('')
 const newRating = ref(0)
@@ -34,7 +47,7 @@ const filteredLogs = computed(() => {
     return logs.value.filter(log => log.stopId === props.stopId)
 })
 
-function addLog() {
+async function addLog() {
     if (!newNote.value.trim()) return
 
     if (newRating.value === 0) {
@@ -42,24 +55,96 @@ function addLog() {
         return
     }
 
-    logs.value.unshift({
-        id: Date.now(),
-        stopId: props.stopId,
-        username: 'You',
-        rating: newRating.value,
-        note: newNote.value.trim(),
-        photo: photoPreview.value
-    })
+    // Check which user is logged in
+    const { data: { user }, error: userError } = await $supabase.auth.getUser()
 
+    if (userError || !user) {
+        alert('Please log in before submitting a stop log!')
+        return
+    }
+
+    // Upload photo if the user selected one
+    let photoUrl = null
+    let uploadedPhotoPath = null
+
+    if (newPhoto.value) {
+        const file = newPhoto.value
+
+        // Check file type and size
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+
+        if (!allowedTypes.includes(file.type)) {
+            alert('Please upload a JPG, PNG or WebP image!')
+            return
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Photo must be smaller than 5 MB!')
+            return
+        }
+
+        // Generate a unique filename
+        const extension = file.type.split('/')[1].replace('jpeg', 'jpg')
+        const filePath = `${user.id}/${crypto.randomUUID()}.${extension}`
+
+        // Upload to Supabase Storage
+        const { error: uploadError } = await $supabase.storage
+            .from('stop-logs-photos')
+            .upload(filePath, file)
+
+        if (uploadError) {
+            console.error('Photo upload error:', uploadError.message)
+            alert('Failed to upload photo!')
+            return
+        }
+
+        uploadedPhotoPath = filePath
+
+        // Get the public URL
+        const { data } = $supabase.storage
+            .from('stop-logs-photos')
+            .getPublicUrl(filePath)
+
+        photoUrl = data.publicUrl
+    }
+
+    // Save the log to Supabase
+    const { error } = await $supabase
+        .from('stop_logs')
+        .insert({
+            user_id: user.id,
+            stop_id: props.stopId,
+            rating: newRating.value,
+            note: newNote.value.trim(),
+            photo_url: photoUrl
+        })
+
+    if (error) {
+        console.error('Error saving log:', error.message)
+        alert('Failed to save your log!')
+        return
+    }
+
+    if (error) {
+        console.error('Error saving log:', error.message)
+        alert('Failed to save your log!')
+        return
+    }
+
+    // Retrieve the latest logs
+    await fetchLogs()
+
+    // Clear the form
     newNote.value = ''
     newRating.value = 0
-
     newPhoto.value = null
     photoPreview.value = ''
 
     if (photoInput.value) {
         photoInput.value.value = ''
     }
+
+    alert('Stop Log saved successfully!')
 }
 
 function handlePhotoChange(event) {
@@ -91,12 +176,6 @@ onUnmounted(() => {
     if (photoPreview.value) {
         URL.revokeObjectURL(photoPreview.value)
     }
-
-    logs.value.forEach(log => {
-        if (log.photo) {
-            URL.revokeObjectURL(log.photo)
-        }
-    })
 })
 
 </script>
