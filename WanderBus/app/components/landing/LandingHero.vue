@@ -1,11 +1,18 @@
 <script setup>
 import LedBoard from '~/components/ui/LedBoard.vue';
 import SpinTicket from '~/components/ui/SpinTicket.vue';
+
+const signMessages = [
+    ['SOMEWHERE NEW', 'ANY BUS, ANY STOP'],
+    ['HAWKER? PARK?', 'TEAR A TICKET'],
+    ['FREE FOR A BIT?', 'TAKE A SIDE QUEST'],
+    ['5103 STOPS', 'ALL FAIR GAME']
+]
 </script>
 
 <template>
     <section class="container py-4">
-        <LedBoard line1="SOMEWHERE NEW" line2="ANY BUS, ANY STOP" class="mb-5" />
+        <LedBoard :messages="signMessages" label="Destination: somewhere new" class="mb-5" />
 
         <div class="row align-items-center g-5">
             <div class="col-lg-6">
@@ -22,7 +29,7 @@ import SpinTicket from '~/components/ui/SpinTicket.vue';
 
             <div class="col-lg-6 text-center">
                 <SpinTicket />
-                <p class="small-note mt-3">Click on the stub to reveal your destination</p>
+                <p class="small-note mt-3">Drag the stub to tear it off and reveal your destination</p>
             </div>
         </div>
     </section>

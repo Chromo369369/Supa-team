@@ -6,7 +6,7 @@ import LedBoard from '~/components/ui/LedBoard.vue';
     <section class="container py-5">
         <div class="cta-box row align-items-center g-4">
             <div class="col-lg-6">
-                <LedBoard line1="YOUR NEXT STOP" line2="IS WAITING" />
+                <LedBoard :messages="[['YOUR NEXT STOP', 'IS WAITING'], ['ONE TAP', 'ONE ADVENTURE']]" label="Your next stop is waiting" />
             </div>
             <div class="col-lg-6">
                 <h2 class="section-title text-white">Free for a couple of hours?</h2>

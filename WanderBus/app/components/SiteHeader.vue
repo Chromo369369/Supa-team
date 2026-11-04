@@ -42,14 +42,13 @@ onUnmounted(() =>
                 </button>
 
                 <div id="main-nav" class="collapse navbar-collapse justify-content-end">
-                    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3 gap-md-4 py-3 py-md-0">
-                        <NuxtLink to="/home" class="header-link">Home</NuxtLink>
+                    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2 py-3 py-md-0">
+                        <NuxtLink to="/home" class="header-link" v-if="valid_session">Home</NuxtLink>
                         <NuxtLink to="/group" class="header-link" v-if="valid_session">Group</NuxtLink>
-                        <NuxtLink to="/login" class="header-login" v-if="!valid_session">Login</NuxtLink>
-                        <NuxtLink to="/passport" class="header-passport">Passport</NuxtLink>
+                        <NuxtLink to="/passport" class="header-link" v-if="valid_session">Passport</NuxtLink>
+                        <NuxtLink to="/login" class="header-link" v-if="!valid_session">Login</NuxtLink>
                         <NuxtLink to="/register" class="btn btn-wb-dark" v-if="!valid_session">Register</NuxtLink>
-                        <NuxtLink to ='/' class="header-link" v-if="valid_session" v-on:click="logout()">Logout</NuxtLink>
-                        
+                        <button type="button" class="header-link" v-if="valid_session" @click="logout()">Logout</button>
                     </div>
                 </div>
             </div>
@@ -74,30 +73,26 @@ onUnmounted(() =>
 }
 
 .header-link {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 50px;
+  background: transparent;
   color: #4a5068;
   font-weight: 500;
   text-decoration: none;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
-.header-link:hover,
-.header-link.active {
+.header-link:hover {
+  background: #f1f2f6;
   color: #141a33;
 }
 
-.header-login {
+/* Green pill on the page you're on (NuxtLink adds router-link-active) */
+.header-link.router-link-active {
+  background: #e3f2ea;
   color: #0b7a4b;
   font-weight: 600;
-  text-decoration: none;
-}
-
-.header-passport {
-  color: #0b7a4b;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.header-login:hover {
-  color: #096640;
 }
 
 .btn-wb-dark {

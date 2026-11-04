@@ -1,15 +1,19 @@
 <script setup lang="ts">
     import { ref } from 'vue'
+    import AuthCard from '~/components/ui/AuthCard.vue'
     const email = ref('')
     const password = ref('')
+    const submitting = ref(false)
     const {$supabase} = useNuxtApp()
-    
+
 
     async function handleLogin() {
+        submitting.value = true
         const {data,error} = await $supabase.auth.signInWithPassword({
             email:email.value,
             password:password.value
         })
+        submitting.value = false
         if (error){
             alert(error.message)
             password.value = ''
@@ -18,27 +22,34 @@
         if(data.session){
             await navigateTo('/home',{replace:true})
         }
-    console.log('Email:', email.value)
 }
 </script>
 
 <template>
-    <div class="mb-3">
-        <h1 class="text-center">Login to WanderBus</h1>
+    <AuthCard
+        title="Log in"
+        intro="Pick up where you left off, or start a new side quest."
+        :sign="[['WELCOME BACK', 'EXPLORER']]"
+        sign-label="Welcome back, explorer"
+    >
+        <form @submit.prevent="handleLogin" class="auth-form">
+            <div>
+                <label for="email" class="form-label">Email address</label>
+                <input id="email" type="email" placeholder="Enter your email" v-model="email" class="form-control" autocomplete="email" required>
+            </div>
 
-        <form @submit.prevent="handleLogin" class="mx-auto p-4" style="max-width: 420px;">
-            
-            <div class="mb-3">
-                <label for="email">Email Address</label>
-                <input id="email" type="email" placeholder="Enter your email" v-model="email" class="form-control" required>
+            <div>
+                <label for="password" class="form-label">Password</label>
+                <input id="password" type="password" placeholder="Enter your password" v-model="password" class="form-control" autocomplete="current-password" required>
             </div>
-            
-            <div class="mb-3">
-                <label for="password">Password</label>
-                <input id="password" type="password" placeholder="Enter your password" v-model="password" class="form-control" required>
-            </div>
-            
-            <button type="submit" class="btn btn-primary w-100">Login</button>
+
+            <button type="submit" class="btn btn-wb-green btn-lg w-100" :disabled="submitting">
+                {{ submitting ? 'Logging in…' : 'Log in' }}
+            </button>
         </form>
-    </div>
+
+        <template #footer>
+            New to WanderBus? <NuxtLink to="/register">Create an account</NuxtLink>
+        </template>
+    </AuthCard>
 </template>

@@ -9,7 +9,7 @@ definePageMeta({ middleware: 'auth' })
 
 const amenStops = await useFetch('/api/allAmenities')
 const preferences = ref([])
-const travelTimeTemp = ref(null)
+const travelTimeTemp = ref(60)
 const travelTime = ref(60)
 const startingLocation = ref('')
 const response = await useFetch('/api/allBusStops')
@@ -33,9 +33,6 @@ async function reroll() {
     chosenStop.value = chooseStop(possibleStops.value)
     stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
     startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
-    
-    // Auto-save new rerolled quest immediately
-    await autoSavePassportEntry()
 }
 
 async function update(){
@@ -108,8 +105,12 @@ async function saveTrip(){
 <template>
     <section class="container py-4 spin-page">
         <h1 class="page-title">Spin a side quest</h1>
-        <p class="small-note mb-4">
-            📍 {{ selectedPlace ? `Starting near ${selectedPlace.ADDRESS}` : 'Pick a starting location to begin' }}
+        <p v-if="selectedPlaceTemp" class="start-line">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+                <circle cx="12" cy="9.5" r="2.5" />
+            </svg>
+            Starting near {{ selectedPlaceTemp.ADDRESS }}
         </p>
 
         <div class="spin-layout">
@@ -117,9 +118,11 @@ async function saveTrip(){
                 v-model:travel-time="travelTimeTemp"
                 v-model:starting-location="startingLocation"
                 v-model:selected-place="selectedPlaceTemp"
+                :places="locResponse.data.value"
                 :categories="Object.keys(categories)"
                 v-model:preferences="preferences"
-                :places="locResponse.data.value"
+                :busy="submitted && !chosenStop && !errorMessage"
+                :has-spun="submitted"
                 @submit="update()"
             />
 
@@ -131,11 +134,9 @@ async function saveTrip(){
                 :start-details="startDetails"
                 :starting-stops="startingStops"
                 :preferences="preferences"
+                :amenities="amenStops.data.value ?? {}"
                 @reroll="reroll()"
-            />
-            <SpinSubmit
-                :submitted="submitted && !!chosenStop"
-                @saveTrip="saveTrip()"
+                @save-trip="saveTrip()"
             />
         </div>
     </section>
@@ -146,6 +147,20 @@ async function saveTrip(){
   font-size: 2.4rem;
   font-weight: 800;
   color: #141a33;
+  margin-bottom: 24px;
+}
+
+.page-title:has(+ .start-line) {
+  margin-bottom: 8px;
+}
+
+.start-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  color: #141a33;
+  font-weight: 500;
 }
 
 /* Expanded to 2 columns (340px for filters, remaining width for results) */
