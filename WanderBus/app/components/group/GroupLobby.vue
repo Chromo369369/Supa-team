@@ -37,6 +37,7 @@ async function shareSpin(){
   if (!result.value){
     return
   }
+  
   const spinData = {
     chosenStop: result.value.chosenStop,
     stopDetails: result.value.stopDetails,
@@ -45,17 +46,18 @@ async function shareSpin(){
     preferences: preferences.value,
     startingAddress: selectedPlace.value.ADDRESS
   }
-  const {data,error} = await $supabase.from('groups').update( {currentSpin: spinData}).eq('group_code', props.group.group_code).select()
+  sharedSpin.value = spinData
+  const {data,error} = await $supabase.from('groups').update( {current_spin: spinData}).eq('group_code', props.group.group_code).select()
   if (error || !data?.length){alert('could not share spin', error)}
 }
 async function saveTrip(){
         try{
             const {data, error} = await $supabase.from('passport_entries').insert({
-                starting_stop: sharedSpin.startDetails.value.Description,
-                end_stop: sharedSpin.stopDetails.value.Description,
+                starting_stop: sharedSpin.value.startDetails.value.Description,
+                end_stop: sharedSpin.value.stopDetails.value.Description,
                 time_taken: Math.ceil(chosenStop.value.chosen.totalTime),
-                bus_taken: sharedSpin.chosenStop.value.chosen.bus,
-                starting_location: sharedSpin.selectedPlace.value.ADDRESS
+                bus_taken: sharedSpin.value.chosenStop.value.chosen.bus,
+                starting_location: sharedSpin.value.selectedPlace.value.ADDRESS
             })
             if(error){
                 alert(`Could not save your trip: ${error.message}`)
@@ -84,6 +86,7 @@ async function spin2(){
   await shareSpin()
 }
 
+const hostLeft = ref(null)
 
 onMounted(async () => {
   try {
@@ -94,16 +97,16 @@ onMounted(async () => {
 
     const { data: groupDetails, error: groupError } = await $supabase
       .from('groups')
-      .select('host_id','current_spin')
+      .select('host_id, current_spin')
       .eq('group_code', props.group.group_code)
       .maybeSingle()
-    sharedSpin.value = groupDetails.current_spin
     if (groupError) throw groupError
     // the host leaving deletes the group row, so a missing group means the host left
     if (!groupDetails) {
       hostLeft.value = true
       return
     }
+    sharedSpin.value = groupDetails.current_spin
 
     isHost.value = userData.user.id == groupDetails.host_id
 
