@@ -11,6 +11,7 @@ const props = defineProps({
   }
 })
 const result = ref(null)
+let channel = null
 const { $supabase } = useNuxtApp()
 const toast = useToast()
 const { confirm } = useConfirm()
@@ -135,10 +136,31 @@ onMounted(async () => {
     groupMembers.value = allMembers.filter(
       member => member.user_id != groupDetails.host_id
     )
+    async function reloadMembers(){
+      const { data } = $supabase.from('group_members').select('user_id, display_name').eq(`group_code=${props.group.group_code}`)
+      groupMembers.value = (data || []).filter(m => m.userId!= groupDetails.host_id)
+    }
+    channel = $supabase.channel(`group-${props.group.group_code}`).on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'groups',
+      filter: `group_code=eq.${props.group.group_code}`
+    }, 
+    (payload) => {sharedSpin.value = payload.new.current_spin})
+    .on('postgres_changes',
+    { event: '*', schema: 'public', table: 'group_members', filter: `group_code=eq.${props.group.group_code}` },
+    (payload2) => { members = payload2.new.display_name })
+    .subscribe()
   } catch {
     membersError.value = 'Couldn’t load your crew. Refresh the page to try again.'
   } finally {
     loadingMembers.value = false
+  }
+})
+
+onUnmounted(()=>{
+  if (channel){
+    $supabase.removeChannel(channel)
   }
 })
 
