@@ -50,6 +50,10 @@ async function shareSpin(){
   sharedSpin.value = spinData
   const {data,error} = await $supabase.from('groups').update( {current_spin: spinData}).eq('group_code', props.group.group_code).select()
   if (error || !data?.length){alert('could not share spin', error)}
+  await $supabase.from('group_spin_options').upsert({
+    group_code: props.group.group_code,
+    possible_stops: result.value.possibleStops
+  })
 }
 async function saveTrip(){
         try{
@@ -73,9 +77,16 @@ async function saveTrip(){
     }
 
 async function respin2(){
-
+  let possibleStops = result?.value.possibleStops
+  if (!possibleStops){
+    const { data } = await $supabase.from('group_spin_options').select('possible_stops').eq('group_code',props.group.group_code).maybeSingle()
+    possibleStops = data?.possibleStops
+  }
   result.value = {...result.value,...reroll(response.data.value,result.value.possibleStops)
   
+  }
+  if (!possibleStops){
+    ready.value=true
   }
   await shareSpin()
 }
@@ -319,7 +330,7 @@ async function copyCode() {
         @submit="spin2()"
         />
         <SpinResults
-        v-if="submitted"
+        v-if="isHost && submitted & (!result || result.errorMessage)"
         :submitted="submitted"
         :error-message="result?.errorMessage"
         :chosen-stop="result?.chosenStop"
@@ -331,13 +342,14 @@ async function copyCode() {
         @save-trip="saveTrip()"
         />
         <SpinResults
-          v-if="!isHost && sharedSpin"
+          v-else-if="sharedSpin"
           :submitted="true"
           :chosen-stop="sharedSpin.chosenStop"
           :stop-details="sharedSpin.stopDetails"
           :start-details="sharedSpin.startDetails"
           :starting-stops="sharedSpin.startingStops"
           :preferences="sharedSpin.preferences"
+          @reroll="respin2()"
           @save-trip="saveTrip()"
         />
         
