@@ -1,4 +1,5 @@
 <script setup>
+import WanderMascot from '~/components/ui/WanderMascot.vue'
 const {$supabase} = useNuxtApp()
 const valid_session = ref(false)
 async function check_session(event){
@@ -31,7 +32,7 @@ onUnmounted(() =>
         <nav class="navbar navbar-expand-md" aria-label="Main">
             <div class="container-fluid header-inner">
                 <NuxtLink to="/" class="navbar-brand header-brand">
-                    <i class="bi bi-bus-front" aria-hidden="true"></i>
+                    <WanderMascot :size="24" gaze />
                     <span>WanderBus</span>
                 </NuxtLink>
 

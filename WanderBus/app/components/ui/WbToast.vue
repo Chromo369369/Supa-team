@@ -1,11 +1,14 @@
 <!-- Toast stack (design.md §2.5). Mounted once in layouts/default.vue; driven by useToast(). -->
 <script setup lang="ts">
+import WanderMascot from '~/components/ui/WanderMascot.vue'
+
 const { toasts, dismiss } = useToast()
 
-const icons = {
-  success: 'bi-check-circle-fill',
-  error: 'bi-exclamation-octagon-fill',
-  info: 'bi-info-circle-fill',
+// The mascot is the toast icon: it hops for a success, droops for an error, waves for info.
+const mascot = {
+  success: { mood: 'happy', color: 'var(--wb-green)' },
+  error: { mood: 'sad', color: 'var(--wb-danger)' },
+  info: { mood: 'wave', color: 'var(--wb-amber)' },
 } as const
 
 function runAction(id: number, run: () => void) {
@@ -24,7 +27,7 @@ function runAction(id: number, run: () => void) {
         class="wb-toast"
         :class="`wb-toast-${t.variant}`"
       >
-        <i class="bi wb-toast-icon" :class="icons[t.variant]" aria-hidden="true"></i>
+        <WanderMascot class="wb-toast-icon" :mood="mascot[t.variant].mood" :color="mascot[t.variant].color" :size="32" />
         <p class="wb-toast-msg">{{ t.message }}</p>
         <button v-if="t.action" type="button" class="btn-wb-ghost btn-sm" @click="runAction(t.id, t.action.run)">
           {{ t.action.label }}
@@ -40,7 +43,7 @@ function runAction(id: number, run: () => void) {
         :key="t.id"
         class="wb-toast wb-toast-error"
       >
-        <i class="bi wb-toast-icon" :class="icons.error" aria-hidden="true"></i>
+        <WanderMascot class="wb-toast-icon" :mood="mascot.error.mood" :color="mascot.error.color" :size="32" />
         <p class="wb-toast-msg">{{ t.message }}</p>
         <button v-if="t.action" type="button" class="btn-wb-ghost btn-sm" @click="runAction(t.id, t.action.run)">
           {{ t.action.label }}
@@ -89,12 +92,9 @@ function runAction(id: number, run: () => void) {
 }
 
 .wb-toast-success { border-left-color: var(--wb-green); }
-.wb-toast-success .wb-toast-icon { color: var(--wb-green); }
 .wb-toast-error { border-left-color: var(--wb-danger); }
-.wb-toast-error .wb-toast-icon { color: var(--wb-danger); }
-.wb-toast-info .wb-toast-icon { color: var(--wb-text-2); }
 
-.wb-toast-icon { font-size: 20px; flex-shrink: 0; }
+.wb-toast-icon { flex-shrink: 0; }
 
 .wb-toast-msg {
   flex: 1;

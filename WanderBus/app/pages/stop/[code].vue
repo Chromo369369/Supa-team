@@ -130,6 +130,7 @@
     function pickTab(name) {
         tab.value = name
         selectedId.value = ''
+        placing.value = ''
     }
 
     // tabs: arrow keys / Home / End move between them (roving tabindex), picking as they go
@@ -166,19 +167,68 @@
     const draft = ref(null)
     const saving = ref(false)
     const saveError = ref('')
+    const placing = ref('')     // 'signpost' | 'challenge' while waiting for a tap on the map (placing mode)
+    const incoming = ref('')    // the kind being dragged from its button onto the map, so the map can show a ghost pin
+    const hoverId = ref('')     // the card or pin under the pointer (or focused), the other one lights up to match
+    const freshKey = ref('')    // just saved: its pin pulses and its card flashes
+    const mapRef = ref(null)
+    const formRef = ref(null)
+    let freshTimer = null
 
     function onDragStart(event, kind) {
         event.dataTransfer.setData('text/plain', kind)
         event.dataTransfer.effectAllowed = 'copy'
+        incoming.value = kind
+        placing.value = ''
     }
 
-    // dropped on the map, or the button was clicked (drag and drop doesn't work on phones, so the pin starts on the stop)
+    function onDragEnd() {
+        incoming.value = ''
+    }
+
+    // tapping "Leave a signpost" / "Set a challenge" enters placing mode, tapping it again leaves it
+    function togglePlacing(kind) {
+        placing.value = placing.value === kind ? '' : kind
+        notice.value = null
+    }
+
+    // dropped on the map, or tapped on it in placing mode
     function startDraft(kind, lat, lon) {
         draft.value = { kind, lat, lon, editing: null }
         saveError.value = ''
         selectedId.value = ''
         notice.value = null
+        placing.value = ''
     }
+
+    // placing mode's "Place at the stop": the pin starts on the stop and gets focus, so the arrow keys can move it
+    async function placeAtStop() {
+        startDraft(placing.value, data.value.stop.lat, data.value.stop.lon)
+        await nextTick()
+        mapRef.value?.focusDraft()
+    }
+
+    // Enter on the draft pin: its spot is set, so on to the form
+    function confirmDraft() {
+        formRef.value?.focusFirst()
+    }
+
+    function onOutside() {
+        notice.value = { type: 'error', text: placing.value
+            ? 'Tap inside the circle, within 1 km of the stop.'
+            : 'Drop the pin inside the circle, within 1 km of the stop.' }
+    }
+
+    // Escape leaves placing mode
+    function onWindowKey(event) {
+        if (event.key === 'Escape' && placing.value) placing.value = ''
+    }
+
+    onMounted(() => window.addEventListener('keydown', onWindowKey))
+    onBeforeUnmount(() => {
+        window.removeEventListener('keydown', onWindowKey)
+        clearTimeout(freshTimer)
+    })
 
     function moveDraft(lat, lon) {
         draft.value.lat = lat
@@ -186,6 +236,7 @@
     }
 
     function editActivity(activity) {
+        placing.value = ''
         draft.value = { kind: activity.kind, lat: activity.lat, lon: activity.lon, editing: activity }
         saveError.value = ''
         selectedId.value = ''
@@ -208,11 +259,21 @@
             showKinds[saved.kind] = true
             draft.value = null
             selectedId.value = saved.key
+            flashSaved(saved.key)
         } catch (e) {
             saveError.value = e.message
         } finally {
             saving.value = false
         }
+    }
+
+    // the saved pin pulses twice and its card flashes (the selectedId watch below scrolls the card into view)
+    async function flashSaved(key) {
+        clearTimeout(freshTimer)
+        freshKey.value = ''
+        await nextTick()
+        freshKey.value = key
+        freshTimer = setTimeout(() => { freshKey.value = '' }, 1600)
     }
 
     function shorten(text, length = 60) {
@@ -382,7 +443,7 @@
                     </button>
                 </div>
 
-                <!-- drag a button onto the map to drop a pin there, or click it to drop the pin on the stop -->
+                <!-- drag a button onto the map to drop a pin there, or tap it and then tap the map (placing mode) -->
                 <div v-if="tab === 'activities'" class="activity-bar">
                     <button
                         v-for="(style, kind) in activityStyles"
@@ -390,18 +451,36 @@
                         type="button"
                         draggable="true"
                         class="btn-drag"
-                        :class="kind === 'signpost' ? 'btn-wb-signal' : 'btn-wb-secondary'"
+                        :class="[kind === 'signpost' ? 'btn-wb-signal' : 'btn-wb-secondary', { 'is-placing': placing === kind }]"
+                        :aria-pressed="placing === kind ? 'true' : 'false'"
                         @dragstart="onDragStart($event, kind)"
-                        @click="startDraft(kind, data.stop.lat, data.stop.lon)"
+                        @dragend="onDragEnd"
+                        @click="togglePlacing(kind)"
                     >
-                        <i class="bi" :class="style.icon" aria-hidden="true"></i>
+                        <i class="bi drag-icon" :class="style.icon" aria-hidden="true"></i>
                         {{ kind === 'signpost' ? 'Leave a signpost' : 'Set a challenge' }}
                     </button>
-                    <span class="drag-hint">Drag a button onto the map to drop your pin inside the circle, or tap it to start at the stop.</span>
+                    <span class="drag-hint">Drag a button onto the map, or tap it and then tap the map. Your pin has to sit inside the circle.</span>
+                </div>
+
+                <!-- placing mode: the next tap on the map places the pin -->
+                <p class="visually-hidden" aria-live="polite">{{ placing ? `Tap the map to place your ${placing}, or choose Place at the stop` : '' }}</p>
+                <div v-if="placing" class="placing-banner">
+                    <p class="placing-text">
+                        <i class="bi bi-hand-index" aria-hidden="true"></i>
+                        Tap the map to place your {{ placing }}
+                    </p>
+                    <div class="placing-buttons">
+                        <button type="button" class="btn-wb-primary btn-sm" @click="placeAtStop">
+                            <i class="bi bi-bus-front" aria-hidden="true"></i> Place at the stop
+                        </button>
+                        <button type="button" class="btn-wb-ghost btn-sm" @click="placing = ''">Cancel placing</button>
+                    </div>
                 </div>
 
                 <div class="stop-layout">
                     <StopMap
+                        ref="mapRef"
                         :key="data.stop.code"
                         :stop="data.stop"
                         :radius="data.radius"
@@ -409,15 +488,23 @@
                         :activities="shownActivities"
                         :draft="draft"
                         :selected-id="selectedId"
+                        :placing="placing"
+                        :incoming="incoming"
+                        :hover-id="hoverId"
+                        :pulse-id="freshKey"
                         @select="id => selectedId = id"
                         @drop="startDraft"
-                        @drop-outside="notice = { type: 'error', text: 'Drop the pin inside the circle, within 1 km of the stop.' }"
+                        @place="(lat, lon) => startDraft(placing, lat, lon)"
+                        @drop-outside="onOutside"
                         @move-draft="moveDraft"
+                        @hover="id => hoverId = id"
+                        @confirm-draft="confirmDraft"
                     />
 
                     <div class="place-list">
                         <ActivityForm
                             v-if="draft"
+                            ref="formRef"
                             :key="draft.editing ? draft.editing.key : `new-${draft.kind}`"
                             :kind="draft.kind"
                             :draft="draft"
@@ -427,6 +514,7 @@
                             :error="saveError"
                             @save="saveDraft"
                             @cancel="closeDraft"
+                            @place-at-stop="moveDraft(data.stop.lat, data.stop.lon)"
                         />
 
                         <!-- a part of the page that failed to load says so here, with a retry -->
@@ -464,7 +552,7 @@
                             <p class="empty-title">No signposts or challenges yet</p>
                             <p class="stop-note">
                                 {{ showKinds.signpost || showKinds.challenge
-                                    ? 'Tap “Leave a signpost” or “Set a challenge” above, or drag one onto the map, to add the first.'
+                                    ? 'Tap “Leave a signpost” or “Set a challenge” above, and then tap the map, or drag one onto the map, to add the first.'
                                     : 'Turn on Signposts or Challenges above to see them.' }}
                             </p>
                         </div>
@@ -475,6 +563,11 @@
                                 :activity="item"
                                 :selected="item.key === selectedId"
                                 :busy="busyKey === item.key"
+                                :class="{ 'is-linked': hoverId === item.key, 'is-fresh': freshKey === item.key }"
+                                @mouseenter="hoverId = item.key"
+                                @mouseleave="hoverId = ''"
+                                @focusin="hoverId = item.key"
+                                @focusout="hoverId = ''"
                                 @select="id => selectedId = id"
                                 @edit="editActivity"
                                 @delete="removeActivity"
@@ -486,7 +579,12 @@
                                 :place="item"
                                 :stop="data.stop"
                                 :selected="item.id === selectedId"
+                                :class="{ 'is-linked': hoverId === item.id }"
                                 :photos="photosByPlace[item.id]"
+                                @mouseenter="hoverId = item.id"
+                                @mouseleave="hoverId = ''"
+                                @focusin="hoverId = item.id"
+                                @focusout="hoverId = ''"
                                 :uploading="uploadingId === item.id"
                                 @select="id => selectedId = id"
                                 @upload="handleUpload"
@@ -733,6 +831,91 @@
 
 .btn-drag:active {
   cursor: grabbing;
+}
+
+/* hover: the button lifts (the shared .btn-wb-* rule) and its pin icon wiggles once */
+.drag-icon {
+  display: inline-block;
+  transform-origin: 50% 100%;
+}
+
+.btn-drag:hover .drag-icon,
+.btn-drag:focus-visible .drag-icon {
+  animation: pin-wiggle var(--t-reveal) var(--ease) 1;
+}
+
+@keyframes pin-wiggle {
+  25% { transform: rotate(-12deg); }
+  50% { transform: rotate(10deg); }
+  75% { transform: rotate(-4deg); }
+}
+
+/* placing mode is on for this button */
+.btn-drag.is-placing {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
+}
+
+.placing-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  background: var(--wb-green-tint);
+  color: var(--wb-ink);
+  border-radius: var(--r-control);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
+  margin: calc(var(--sp-3) * -1) 0 var(--sp-5);
+  animation: banner-in var(--t-ui) var(--ease) both;
+}
+
+.placing-text {
+  margin: 0;
+  font-weight: 500;
+}
+
+.placing-text .bi {
+  color: var(--wb-green);
+  margin-right: var(--sp-1);
+}
+
+.placing-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+@keyframes banner-in {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+
+/* a card whose pin is hovered (or the card itself is): an amber ring, the same one its pin gets */
+.is-linked:not(.is-selected) {
+  outline: 3px solid var(--wb-amber);
+  outline-offset: 0;
+}
+
+/* just saved: the card flashes green once */
+.is-fresh {
+  position: relative;
+}
+
+.is-fresh::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--wb-green-tint);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  opacity: 0;
+  animation: card-flash var(--t-signature) var(--ease) both;
+}
+
+@keyframes card-flash {
+  15% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .drag-hint {

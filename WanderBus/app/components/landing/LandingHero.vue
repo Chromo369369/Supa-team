@@ -1,18 +1,12 @@
 <script setup>
-import LedBoard from '~/components/ui/LedBoard.vue';
 import SpinTicket from '~/components/ui/SpinTicket.vue';
-
-const signMessages = [
-    ['SOMEWHERE NEW', 'ANY BUS, ANY STOP'],
-    ['HAWKER? PARK?', 'TEAR A TICKET'],
-    ['FREE FOR A BIT?', 'TAKE A SIDE QUEST'],
-    ['5103 STOPS', 'ALL FAIR GAME']
-]
+import BusStopPole from '~/components/landing/BusStopPole.vue';
+import HeroChase from '~/components/landing/HeroChase.vue';
 </script>
 
 <template>
     <section class="container hero-section">
-        <LedBoard :messages="signMessages" label="Destination: somewhere new" class="hero-sign" />
+        <BusStopPole class="hero-pole" />
 
         <h1 class="hero-title">Take a random bus. Get off somewhere worth it.</h1>
 
@@ -37,25 +31,38 @@ const signMessages = [
                 <p class="small-note mt-3 mb-0">Drag, tap or press Enter to tear the stub</p>
             </div>
         </div>
+
+        <!-- Last, so its pause toggle comes after the hero content in tab order -->
+        <HeroChase />
     </section>
 </template>
 
 <style scoped>
 .hero-section {
+  position: relative;
   padding-block: var(--sp-5) var(--sp-8);
   padding-inline: var(--gutter);
 }
 
-.hero-sign {
-  margin-bottom: var(--sp-7);
+/* Content sits above the chase layer (HeroChase keeps its own toggle above both). */
+.hero-pole,
+.hero-title,
+.hero-section > .row {
+  position: relative;
+  z-index: 1;
 }
 
-/* Full width so the headline holds to two lines on desktop */
+.hero-pole {
+  margin-bottom: var(--sp-6);
+}
+
+/* Full width so the headline holds to two lines on desktop; 7vw keeps it to two lines on phones */
 .hero-title {
   margin: 0 0 var(--sp-5);
-  font-size: var(--fs-hero);
-  line-height: 1;
+  font-size: min(var(--fs-hero), 7vw);
+  line-height: 1.05;
   letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 .hero-actions {
@@ -83,6 +90,10 @@ const signMessages = [
 @media (min-width: 992px) {
   .hero-section {
     padding-bottom: var(--sp-9);
+  }
+
+  .hero-pole {
+    margin-bottom: var(--sp-5);
   }
 }
 </style>

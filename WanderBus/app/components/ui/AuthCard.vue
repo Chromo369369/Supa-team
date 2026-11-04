@@ -1,29 +1,45 @@
 <!-- Shared frame for the login and register forms: an LED sign above a card. -->
 <script setup>
+import { computed, ref } from 'vue'
 import LedBoard from '~/components/ui/LedBoard.vue'
+import WanderMascot from '~/components/ui/WanderMascot.vue'
 
-defineProps({
+const props = defineProps({
     title: { type: String, required: true },
     intro: { type: String, default: '' },
     /** Messages for the LED sign, e.g. [['WELCOME BACK', 'EXPLORER']] */
     sign: { type: Array, required: true },
-    signLabel: { type: String, default: '' }
+    signLabel: { type: String, default: '' },
+    /** Override the mascot's mood, e.g. 'happy' on "Check your inbox". Empty = peek / cover-eyes. */
+    mascotMood: { type: String, default: '' }
 })
+
+// The mascot covers its eyes while a slotted password field has focus.
+// Listening on the card keeps login.vue and register.vue untouched.
+const coverEyes = ref(false)
+const isPassword = el => el instanceof HTMLInputElement && el.type === 'password'
+function onFocusIn(e) { coverEyes.value = isPassword(e.target) }
+function onFocusOut(e) { coverEyes.value = isPassword(e.relatedTarget) }
+
+const mood = computed(() => props.mascotMood || (coverEyes.value ? 'cover-eyes' : 'peek'))
 </script>
 
 <template>
     <div class="auth-page">
-        <section class="auth-card" aria-labelledby="auth-title">
-            <LedBoard class="auth-sign" badge="WB" :messages="sign" :label="signLabel" />
-            <div class="auth-body">
-                <h1 id="auth-title" class="auth-title">{{ title }}</h1>
-                <p v-if="intro" class="auth-intro">{{ intro }}</p>
-                <slot />
-                <p v-if="$slots.footer" class="auth-switch">
-                    <slot name="footer" />
-                </p>
-            </div>
-        </section>
+        <div class="auth-frame">
+            <WanderMascot class="auth-mascot" :mood="mood" :size="88" gaze />
+            <section class="auth-card" aria-labelledby="auth-title" @focusin="onFocusIn" @focusout="onFocusOut">
+                <LedBoard class="auth-sign" badge="WB" :messages="sign" :label="signLabel" />
+                <div class="auth-body">
+                    <h1 id="auth-title" class="auth-title">{{ title }}</h1>
+                    <p v-if="intro" class="auth-intro">{{ intro }}</p>
+                    <slot />
+                    <p v-if="$slots.footer" class="auth-switch">
+                        <slot name="footer" />
+                    </p>
+                </div>
+            </section>
+        </div>
     </div>
 </template>
 
@@ -37,9 +53,25 @@ defineProps({
   padding: var(--sp-5) 0 var(--sp-8);
 }
 
-.auth-card {
+/* The mascot sits behind the card, so the card's top edge hides its lower half. */
+.auth-frame {
+  position: relative;
   width: 100%;
   max-width: 28rem;
+  margin-top: 52px;
+}
+
+.auth-mascot {
+  position: absolute;
+  z-index: 0;
+  top: -52px;
+  right: var(--sp-6);
+}
+
+.auth-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
   background: var(--wb-surface);
   border-radius: var(--r-card);
   overflow: hidden;

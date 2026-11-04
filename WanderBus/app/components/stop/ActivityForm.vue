@@ -9,7 +9,8 @@ const props = defineProps({
     error: { type: String, default: '' }   // why the last save failed, shown above the buttons
 })
 
-const emit = defineEmits(['save', 'cancel'])
+// place-at-stop = put the pin back on the stop's own spot (the page moves the draft)
+const emit = defineEmits(['save', 'cancel', 'place-at-stop'])
 const { confirm } = useConfirm()
 
 const style = computed(() => activityStyles[props.kind])
@@ -32,6 +33,15 @@ const startingForm = JSON.stringify(form)
 const changed = computed(() => JSON.stringify(form) !== startingForm || photo.value !== null)
 
 const formId = computed(() => `${props.kind}-form`)
+const formEl = ref(null)
+const atStop = computed(() => distance.value === 0)
+
+// Enter on the draft pin confirms where it goes, and the page sends focus here to fill in the rest
+function focusFirst() {
+    formEl.value?.querySelector('textarea, input[type="text"]')?.focus()
+}
+
+defineExpose({ focusFirst })
 
 function submit() {
     if (props.kind == 'signpost' && form.rating == 0) {
@@ -57,15 +67,20 @@ async function cancel() {
 </script>
 
 <template>
-    <form class="activity-form" :aria-labelledby="`${formId}-title`" @submit.prevent="submit">
+    <form ref="formEl" class="activity-form" :aria-labelledby="`${formId}-title`" @submit.prevent="submit">
         <h3 :id="`${formId}-title`" class="form-title">
             <span class="form-icon" :style="{ background: style.colour, color: style.glyph }"><i class="bi" :class="style.icon" aria-hidden="true"></i></span>
             {{ existing ? 'Edit your' : kind == 'signpost' ? 'Leave a' : 'Set a' }} {{ style.label.toLowerCase() }}
         </h3>
-        <p class="pin-note">
-            <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
-            Your pin is <span class="num">{{ distance }} m</span> from the stop. Drag it on the map to move it.
-        </p>
+        <div class="pin-row">
+            <p class="pin-note">
+                <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
+                Your pin is <span class="num">{{ distance }} m</span> from the stop. Drag it on the map, or focus it and use the arrow keys, to move it.
+            </p>
+            <button type="button" class="btn-wb-ghost btn-sm pin-reset" :disabled="saving || atStop" @click="emit('place-at-stop')">
+                <i class="bi bi-bus-front" aria-hidden="true"></i> Place at the stop
+            </button>
+        </div>
 
         <template v-if="kind == 'signpost'">
             <label for="signpostNote" class="form-label">Your note</label>
@@ -148,6 +163,12 @@ async function cancel() {
   background: var(--wb-surface-2);
   border-radius: var(--r-card);
   padding: var(--sp-5);
+  animation: form-in var(--t-ui) var(--ease) both;
+}
+
+/* the pin has landed, the form slides in beside it */
+@keyframes form-in {
+  from { opacity: 0; transform: translateY(12px); }
 }
 
 .form-title {
@@ -171,10 +192,24 @@ async function cancel() {
   flex-shrink: 0;
 }
 
+.pin-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0 0 var(--sp-4);
+}
+
 .pin-note {
+  flex: 1 1 220px;
   font-size: var(--fs-small);
   color: var(--wb-text-2);
-  margin: 0 0 var(--sp-4);
+  margin: 0;
+}
+
+.pin-reset {
+  flex-shrink: 0;
 }
 
 .form-label {

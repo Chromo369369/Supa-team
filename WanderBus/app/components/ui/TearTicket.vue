@@ -2,9 +2,12 @@
   TearTicket: a ticket whose perforated stub tears off by hand, fibre by fibre, and drops away.
 
   Ported to Vue 3 (no animation library) from "Tear Ticket" by David Haz, React Bits:
-  https://reactbits.dev/micro/tear-ticket — Copyright (c) 2026 David Haz, MIT + Commons Clause licence.
+  https://reactbits.dev/micro/tear-ticket. Copyright (c) 2026 David Haz, MIT + Commons Clause licence.
   Used as part of this application only, as the licence allows. Changes for WanderBus: Vue port,
-  CSS-transition tilt instead of motion springs, no image layer, `width` follows the container.
+  CSS-transition tilt instead of motion springs, no image layer, `width` follows the container,
+  perforation drawn as a CSS mask (inline SVG: half-circle notches on both edges plus a row of
+  4px holes), flat paper with an ink outline, and lift + 1.02 scale only while the stub floats
+  (design.md §3.4). Hit-testing uses an invisible SVG path, because masks don't clip pointer events.
 
   Accessibility: the stub is a real focusable button; Enter or Space tears it instantly, and
   reduced-motion users get an instant tear after a short drag. The focus ring is drawn outside the
@@ -22,8 +25,8 @@ const props = defineProps({
   stubSize: { type: Number, default: 120 },
   radius: { type: Number, default: 16 },
   holes: { type: Number, default: 12 },
-  holeSize: { type: Number, default: 6 },
-  notch: { type: Number, default: 6 },
+  holeSize: { type: Number, default: 4 },
+  notch: { type: Number, default: 8 },
   roughness: { type: Number, default: 0.6 },
   tearAngle: { type: Number, default: 30 },
   stretch: { type: Number, default: 30 },
@@ -39,6 +42,7 @@ const props = defineProps({
   color: { type: String, default: 'var(--wb-ink)' },
   border: { type: Boolean, default: true },
   borderColor: { type: String, default: '' },
+  /** The stroke is centred on the edge and the paper covers its inner half, so 4 shows a 2px outline. */
   borderWidth: { type: Number, default: 1 },
   recenter: { type: Boolean, default: true },
   disabled: { type: Boolean, default: false },
@@ -108,8 +112,17 @@ function buildGeometry(W, H, S, R, holes, hole, notch, rough, vertical) {
     { ...at(x, cross - notch), v: cross - notch },
   ]
   const bodyOutline = `M${pt(x, cross - notch)}${arc(notch, 0, x - notch, cross)}L${pt(R, cross)}${arc(R, 1, 0, cross - R)}L${pt(0, R)}${arc(R, 1, R, 0)}L${pt(x - notch, 0)}${arc(notch, 0, x, notch)}`
+  // The body's torn edge (bridges + half holes), outlined only once the stub is gone.
+  let tearEdge = `M${pt(x, notch)}`
+  bridges.forEach((b, i) => {
+    b.pts.forEach((p) => {
+      tearEdge += `L${pt(p[0], p[1])}`
+    })
+    tearEdge += `L${pt(x, b.y1)}`
+    if (i < n) tearEdge += arc(hr, 0, x, b.y1 + hole)
+  })
   const stubOutline = `M${pt(x, notch)}${arc(notch, 0, x + notch, 0)}L${pt(main - R, 0)}${arc(R, 1, main, R)}L${pt(main, cross - R)}${arc(R, 1, main - R, cross)}L${pt(x + notch, cross)}${arc(notch, 0, x, cross - notch)}`
-  return { vertical, cross, body, stub, bridges, ends, bodyOutline, stubOutline }
+  return { vertical, cross, body, stub, bridges, ends, bodyOutline, stubOutline, tearEdge }
 }
 
 const vertical = computed(() => props.orientation === 'vertical')
@@ -117,9 +130,20 @@ const geo = computed(() =>
   buildGeometry(props.width, props.height, props.stubSize, props.radius, props.holes, props.holeSize, props.notch, props.roughness, vertical.value),
 )
 
+/** An inline-SVG CSS mask for one piece: the punched notches and holes are cut out of the paper. */
+function maskFor(d) {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${props.width}' height='${props.height}' viewBox='0 0 ${props.width} ${props.height}'><path d='${d}' fill='#000'/></svg>`
+  const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
+  return { maskImage: url, WebkitMaskImage: url }
+}
+const bodyMask = computed(() => maskFor(geo.value.body))
+const stubMask = computed(() => maskFor(geo.value.stub))
+
 const inner = ref(false)
 const used = computed(() => (props.torn === undefined ? inner.value : props.torn))
 const grabbing = ref(false)
+/** True while the stub floats: held, hanging free or falling. Drives the --wb-lift elevation and scale. */
+const lifted = ref(false)
 const instant = ref(false)
 const fit = ref(1)
 const reduceMotion = ref(false)
@@ -234,6 +258,7 @@ function paint(now) {
 }
 
 function finish() {
+  lifted.value = false
   if (stubEl.value) stubEl.value.style.visibility = 'hidden'
   if (props.torn === undefined) inner.value = true
   emit('tear')
@@ -305,6 +330,7 @@ function step(now) {
     s.sy += (0 - s.sy) * (1 - Math.exp(-dt / 0.07))
     if (Math.abs(s.theta) < 0.0008 && Math.abs(s.thetaV) < 0.01 && Math.hypot(s.sx, s.sy) < 0.05) {
       Object.assign(s, { theta: 0, thetaV: 0, sx: 0, sy: 0, phase: 'idle' })
+      lifted.value = false
     }
   }
   s.bv += (-520 * s.bx - 30 * s.bv) * dt
@@ -332,6 +358,7 @@ function reset() {
   sim.snapped = []
   sim.snapAt = []
   sim.span = []
+  lifted.value = false
   if (stubEl.value) stubEl.value.style.visibility = ''
   paint(performance.now())
 }
@@ -385,6 +412,7 @@ function onStubDown(e) {
   tiltX.value = 0
   tiltY.value = 0
   grabbing.value = true
+  lifted.value = !reduceMotion.value
   run()
 }
 
@@ -515,6 +543,7 @@ watch(geo, () => {
     :data-shift="used && recenter ? (vertical ? 'y' : 'x') : undefined"
     :data-instant="instant ? '' : undefined"
     :data-grabbing="grabbing ? '' : undefined"
+    :data-lifted="lifted ? '' : undefined"
     :data-disabled="disabled ? '' : undefined"
     :style="rootStyle"
   >
@@ -523,8 +552,9 @@ watch(geo, () => {
         <div ref="body" class="tear-ticket__piece">
           <svg v-if="border" class="tear-ticket__edge" :viewBox="`0 0 ${width} ${height}`" aria-hidden="true">
             <path :d="geo.bodyOutline" />
+            <path :d="geo.tearEdge" class="tear-ticket__tear-edge" />
           </svg>
-          <div class="tear-ticket__paper" :style="{ clipPath: `path('${geo.body}')` }">
+          <div class="tear-ticket__paper tear-ticket__paper--body" :style="bodyMask">
             <div class="tear-ticket__content" :style="inkStyle">
               <slot />
             </div>
@@ -564,11 +594,15 @@ watch(geo, () => {
             </mask>
             <path :d="geo.stubOutline" class="tear-ticket__ring" :mask="`url(#${uid}-ring)`" />
           </svg>
-          <div class="tear-ticket__paper tear-ticket__paper--stub" :style="{ clipPath: `path('${geo.stub}')` }">
+          <div class="tear-ticket__paper tear-ticket__paper--stub" :style="stubMask">
             <div class="tear-ticket__stub">
               <slot name="stub" />
             </div>
           </div>
+          <!-- The grab area: exactly the stub's shape (a mask alone would let the whole ticket catch the drag). -->
+          <svg class="tear-ticket__hit" :viewBox="`0 0 ${width} ${height}`" aria-hidden="true" focusable="false">
+            <path :d="geo.stub" />
+          </svg>
         </div>
       </div>
     </div>
@@ -624,6 +658,12 @@ watch(geo, () => {
 .tear-ticket__piece--stub {
   outline: none;
   will-change: transform;
+  transition: scale var(--t-micro) var(--ease);
+}
+
+/* A torn stub stays hidden before the script runs (SSR), not just after onMounted. */
+.tear-ticket[data-used] .tear-ticket__piece--stub {
+  visibility: hidden;
 }
 
 .tear-ticket__focus {
@@ -660,8 +700,9 @@ watch(geo, () => {
   stroke-width: 8;
 }
 
-/* Only while it is held does the stub float, so only then does it get --wb-lift (design.md §3.4). */
-.tear-ticket[data-grabbing] .tear-ticket__piece--stub {
+/* Flat paper at rest. Only while it floats (held or falling) does the stub get --wb-lift and 1.02 scale (design.md §3.4). */
+.tear-ticket[data-lifted] .tear-ticket__piece--stub {
+  scale: 1.02;
   filter: drop-shadow(var(--wb-lift)); /* taste-skill-ignore: lifted stub is a floating object */
 }
 
@@ -678,27 +719,60 @@ watch(geo, () => {
   fill: none;
   stroke: var(--tt-edge);
   stroke-width: var(--tt-edge-w);
+  stroke-linejoin: round;
+}
+
+/* Before the tear the green stub defines the tear line; after it, the torn edge needs its own ink. */
+.tear-ticket__edge .tear-ticket__tear-edge {
+  opacity: 0;
+  transition: opacity var(--t-ui) var(--ease);
+}
+
+.tear-ticket[data-used] .tear-ticket__tear-edge {
+  opacity: 1;
 }
 
 .tear-ticket__paper {
   position: absolute;
   inset: 0;
   background: var(--tt-bg);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.tear-ticket__paper--body {
   pointer-events: auto;
 }
 
 .tear-ticket__paper--stub {
   background: var(--tt-stub-bg);
-  cursor: grab;
+  pointer-events: none;
+}
+
+.tear-ticket__hit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
   touch-action: none;
 }
 
-.tear-ticket[data-grabbing] .tear-ticket__paper--stub {
+.tear-ticket__hit path {
+  fill: transparent;
+  pointer-events: visiblePainted;
+  cursor: grab;
+}
+
+.tear-ticket[data-grabbing] .tear-ticket__hit path {
   cursor: grabbing;
 }
 
-.tear-ticket[data-used] .tear-ticket__paper--stub,
-.tear-ticket[data-disabled] .tear-ticket__paper--stub {
+.tear-ticket[data-used] .tear-ticket__hit path,
+.tear-ticket[data-disabled] .tear-ticket__hit path {
   cursor: default;
 }
 
@@ -755,8 +829,14 @@ watch(geo, () => {
 @media (prefers-reduced-motion: reduce) {
   .tear-ticket__stage,
   .tear-ticket__plane,
-  .tear-ticket__content {
+  .tear-ticket__content,
+  .tear-ticket__piece--stub,
+  .tear-ticket__tear-edge {
     transition: none;
+  }
+
+  .tear-ticket[data-lifted] .tear-ticket__piece--stub {
+    scale: none;
   }
 }
 </style>

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import SeatMap from '~/components/group/SeatMap.vue'
 
 const emit = defineEmits(['leave'])
 
@@ -181,29 +182,23 @@ async function copyCode() {
             <span>Nobody can start the spin without a host. Leave this crew, then host or join another.</span>
           </div>
         </div>
-        <div v-else class="member-row">
-          <i class="bi bi-award-fill host-icon" aria-hidden="true"></i>
-          <div class="member-details">
-            <strong>{{ hostName }}</strong>
-            <span>Host</span>
-          </div>
-        </div>
+
+        <SeatMap
+          v-if="!hostLeft && !loadingMembers && !membersError"
+          class="lobby-seats"
+          :members="groupMembers"
+          :host-name="hostName"
+          :is-host="isHost"
+          :code="group.group_code"
+          :current-user-id="currentUserId"
+        />
 
         <div class="waiting-box" aria-live="polite">
           <span v-if="loadingMembers">Loading your crew…</span>
           <span v-else-if="membersError" role="alert">{{ membersError }}</span>
-          <span v-else-if="groupMembers.length == 0">
+          <span v-else-if="!hostLeft && groupMembers.length == 0">
             Waiting for friends to join…
           </span>
-          <ul v-else class="member-list">
-            <li
-              v-for="member in groupMembers"
-              :key="member.user_id"
-            >
-              <i class="bi bi-person" aria-hidden="true"></i>
-              {{ member.display_name }}
-            </li>
-          </ul>
         </div>
 
         <p v-if="!isHost && !loadingMembers && !hostLeft" id="spin-hint" class="spin-hint">
@@ -320,20 +315,16 @@ async function copyCode() {
   color: var(--wb-text-2);
 }
 
-.member-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  margin: 0;
+/* nothing to say once the crew has loaded: collapse the well, keep the live region */
+.waiting-box:empty {
+  margin: 0 0 var(--sp-5);
   padding: 0;
-  list-style: none;
-  color: var(--wb-ink);
-  overflow-wrap: anywhere;
+  background: none;
 }
 
-.member-list .bi {
-  margin-right: var(--sp-1);
-  color: var(--wb-text-2);
+.lobby-seats {
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-4);
 }
 
 .lobby-card .spin-hint {

@@ -28,6 +28,8 @@ const stopDetails = ref('')
 const startDetails = ref('')
 const errorMessage = ref('')
 const possibleStops = ref({})
+// Up to 3 different stops for bays A/B/C; picking a bay sets chosenStop.
+const ticketOptions = ref([])
 
 
 async function reroll() {
@@ -36,10 +38,29 @@ async function reroll() {
     startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
 }
 
+// chooseStop can repeat a pick, so call it on a shrinking copy (it still throws when nothing fits).
+function pickTickets(stops) {
+    const left = { ...stops }
+    const picks = []
+    do {
+        const pick = chooseStop(left)
+        picks.push(pick)
+        delete left[pick.destination]
+    } while (picks.length < 3 && Object.keys(left).length)
+    return picks
+}
+
+function chooseTicket(option) {
+    chosenStop.value = option
+    stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
+    startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+}
+
 async function update(){
     submitted.value = true
     errorMessage.value = ''
     chosenStop.value = ''
+    ticketOptions.value = []
     travelTime.value = travelTimeTemp.value
     selectedPlace.value = selectedPlaceTemp.value
 
@@ -72,9 +93,7 @@ async function update(){
         }
         possibleStops.value = filterBusStops(arrivals, travelTime.value, allRoutes.data.value, starts)
         possibleStops.value = filterByAmens(preferences.value, possibleStops.value, amenStops.data.value)
-        chosenStop.value = chooseStop(possibleStops.value)
-        stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
-        startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+        ticketOptions.value = pickTickets(possibleStops.value)
 
 
     } catch (e) {
@@ -130,7 +149,7 @@ async function saveTrip(){
                 :places="locResponse.data.value"
                 :categories="Object.keys(categories)"
                 v-model:preferences="preferences"
-                :busy="submitted && !chosenStop && !errorMessage"
+                :busy="submitted && !chosenStop && !ticketOptions.length && !errorMessage"
                 :has-spun="submitted"
                 @submit="update()"
             />
@@ -139,6 +158,8 @@ async function saveTrip(){
                 :submitted="submitted"
                 :error-message="errorMessage"
                 :chosen-stop="chosenStop"
+                :ticket-options="ticketOptions"
+                :bus-stops="response.data.value ?? []"
                 :stop-details="stopDetails"
                 :start-details="startDetails"
                 :starting-stops="startingStops"
@@ -147,6 +168,8 @@ async function saveTrip(){
                 :saving="savingTrip"
                 :saved="savedTrip"
                 @reroll="reroll()"
+                @choose="chooseTicket($event)"
+                @retry="update()"
                 @save-trip="saveTrip()"
             />
         </div>

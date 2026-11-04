@@ -96,6 +96,7 @@
         intro="Your account is set up. Confirm your email, then log in to start your first side quest."
         :sign="[['CHECK YOUR', 'INBOX']]"
         sign-label="Check your inbox"
+        mascot-mood="happy"
     >
         <NuxtLink to="/login" class="btn btn-wb-primary btn-lg w-100 mt-3">Log in</NuxtLink>
     </AuthCard>

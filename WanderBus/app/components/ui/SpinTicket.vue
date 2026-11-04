@@ -1,6 +1,9 @@
 <!--
   SpinTicket: a mystery trip shown as a bus ticket. Drag the stub to tear it off (or focus it and
   press Enter) to reveal the bus, boarding stop and destination.
+
+  `compact`: a small, already-torn ticket strip (bus, board at, get off at, ride) for the passport
+  memory card. Not interactive: no stub, no tilt, no focus stop, no reset button. Reads at ~260px.
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -23,7 +26,9 @@ const props = defineProps({
     /** Show a “Put the stub back” button after tearing. */
     resettable: { type: Boolean, default: true },
     /** Heading level of the ticket title, so it fits the page outline (2–6). */
-    headingLevel: { type: Number, default: 2, validator: (n) => n >= 2 && n <= 6 }
+    headingLevel: { type: Number, default: 2, validator: (n) => n >= 2 && n <= 6 },
+    /** Mini, non-interactive strip of the torn ticket (passport memory card). Ignores orientation. */
+    compact: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['tear'])
@@ -34,6 +39,13 @@ const wrap = ref(null)
 const available = ref(580)
 let observer = null
 
+// The reveal is a CSS transition; JS also drops it under reduced motion (the global guard is the backstop).
+const reduceMotion = ref(false)
+let motionQuery = null
+const onMotionChange = () => {
+    reduceMotion.value = motionQuery.matches
+}
+
 onMounted(() => {
     const measure = () => {
         if (wrap.value) available.value = wrap.value.clientWidth || available.value
@@ -41,19 +53,29 @@ onMounted(() => {
     measure()
     observer = new ResizeObserver(measure)
     observer.observe(wrap.value)
-})
-onBeforeUnmount(() => observer?.disconnect())
 
-const vertical = computed(() => props.orientation === 'vertical')
+    motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    reduceMotion.value = motionQuery.matches
+    motionQuery.addEventListener('change', onMotionChange)
+})
+onBeforeUnmount(() => {
+    observer?.disconnect()
+    motionQuery?.removeEventListener('change', onMotionChange)
+})
+
+const vertical = computed(() => !props.compact && props.orientation === 'vertical')
+const torn = computed(() => props.compact || isRevealed.value)
 
 // The tear geometry is drawn in px, so pick a size that fits the space we have.
 const size = computed(() => {
+    if (props.compact) return { width: Math.min(360, Math.max(240, available.value)), height: 108, stub: 16 }
     if (vertical.value) return { width: Math.min(272, Math.max(220, available.value)), height: 392, stub: 96 }
     const width = Math.min(580, Math.max(280, available.value))
     if (width < 400) return { width, height: 210, stub: 92 }
     return { width, height: 230, stub: 130 }
 })
-const compact = computed(() => !vertical.value && size.value.width < 400)
+const narrow = computed(() => !props.compact && !vertical.value && size.value.width < 400)
+const holes = computed(() => (props.compact ? 6 : vertical.value ? 16 : 14))
 const headingTag = computed(() => `h${Math.min(6, Math.max(2, props.headingLevel))}`)
 const iconClass = computed(() => (props.icon.startsWith('bi-') ? props.icon : 'bi-ticket-perforated'))
 
@@ -70,31 +92,62 @@ const barcode = computed(() => {
 const barcodeWidth = BARS.reduce((sum, w) => sum + w + 1, 0)
 
 function onTear() {
+    if (props.compact) return
     isRevealed.value = true
     emit('tear')
 }
 </script>
 
 <template>
-    <div ref="wrap" class="spin-ticket" :class="{ 'spin-ticket--compact': compact, 'spin-ticket--vertical': vertical }">
+    <div
+        ref="wrap"
+        class="spin-ticket"
+        :class="{ 'spin-ticket--narrow': narrow, 'spin-ticket--vertical': vertical, 'spin-ticket--strip': compact }"
+    >
+        <!-- border-width 4 shows a 2px ink outline: the paper covers the stroke's inner half. -->
         <TearTicket
-            :torn="isRevealed"
-            :orientation="orientation"
+            :torn="torn"
+            :orientation="vertical ? 'vertical' : 'horizontal'"
             :width="size.width"
             :height="size.height"
             :stub-size="size.stub"
-            :holes="vertical ? 11 : 9"
-            :radius="16"
+            :holes="holes"
+            :hole-size="4"
+            :notch="compact ? 6 : 9"
+            :radius="compact ? 12 : 16"
             background="var(--wb-surface)"
             stub-background="var(--wb-green)"
             border-color="var(--wb-ink)"
             :border-width="4"
-            :recenter="!vertical"
+            :recenter="!vertical && !compact"
+            :tilt="!compact"
             aria-label="Tear the stub to reveal your bus"
             @tear="onTear"
         >
-            <div class="ticket-body">
-                <Transition name="reveal" mode="out-in">
+            <div v-if="compact" class="ticket-body ticket-strip">
+                <p class="strip-head">
+                    <span class="strip-bus">
+                        <i :class="['bi', bus ? 'bi-bus-front' : 'bi-person-walking']" aria-hidden="true"></i>
+                        <span v-if="bus" class="num">{{ bus }}</span>
+                        <template v-else>Walk</template>
+                    </span>
+                    <span class="strip-meta">
+                        <template v-if="bus && stops != null"><span class="num">{{ stops }}</span> stops<template v-if="travelTime != null"> · </template></template>
+                        <template v-if="travelTime != null">about <span class="num">{{ travelTime }}</span> min</template>
+                    </span>
+                </p>
+                <dl class="strip-rows">
+                    <template v-if="bus">
+                        <dt>Board at</dt>
+                        <dd :title="boardAt">{{ boardAt }}</dd>
+                    </template>
+                    <dt>{{ bus ? 'Get off at' : 'Walk to' }}</dt>
+                    <dd :title="area ? `${getOffAt} · ${area}` : getOffAt">{{ getOffAt }}<span v-if="area" class="detail-muted"> · {{ area }}</span></dd>
+                </dl>
+            </div>
+
+            <div v-else class="ticket-body">
+                <Transition :name="reduceMotion ? 'reveal-instant' : 'reveal'" mode="out-in">
                     <div v-if="!isRevealed" key="face" class="ticket-face">
                         <span class="ticket-icon" aria-hidden="true"><i :class="['bi', iconClass]"></i></span>
                         <div>
@@ -131,7 +184,7 @@ function onTear() {
                 </Transition>
             </div>
 
-            <template #stub>
+            <template v-if="!compact" #stub>
                 <div class="ticket-stub">
                     <span class="stub-mark" aria-hidden="true">?</span>
                     <span class="stub-text">Tear here</span>
@@ -139,8 +192,8 @@ function onTear() {
             </template>
         </TearTicket>
 
-        <div v-if="resettable && isRevealed" class="stub-reset-row">
-            <button type="button" class="btn-wb-ghost btn-sm" @click="isRevealed = false">
+        <div v-if="resettable && isRevealed && !compact" class="stub-reset-row">
+            <button type="button" class="btn-wb-ghost" @click="isRevealed = false">
                 <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
                 Put the stub back
             </button>
@@ -321,28 +374,98 @@ function onTear() {
 }
 
 /* Narrow phones: tighter padding, bus number above the details */
-.spin-ticket--compact .ticket-body {
+.spin-ticket--narrow .ticket-body {
   padding: var(--sp-4);
 }
 
-.spin-ticket--compact .ticket-details {
+.spin-ticket--narrow .ticket-details {
   flex-direction: column;
   gap: var(--sp-1);
 }
 
-.spin-ticket--compact .bus-col {
+.spin-ticket--narrow .bus-col {
   flex-direction: row;
   align-items: baseline;
   gap: var(--sp-2);
 }
 
-.spin-ticket--compact .bus-number {
+.spin-ticket--narrow .bus-number {
   font-size: var(--fs-title);
 }
 
-.spin-ticket--compact .detail-value {
+.spin-ticket--narrow .detail-value {
   margin-bottom: 2px;
   font-size: var(--fs-small);
+}
+
+/* Compact strip: the torn ticket in miniature, for the passport memory card */
+.spin-ticket--strip {
+  max-width: 360px;
+  margin-inline: 0;
+}
+
+.ticket-strip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
+  border-left-width: 4px;
+}
+
+.strip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin: 0;
+}
+
+.strip-bus {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--wb-ink);
+}
+
+.strip-bus .bi {
+  font-size: var(--fs-body);
+}
+
+.strip-meta {
+  font-size: var(--fs-meta);
+  color: var(--wb-text-2);
+  white-space: nowrap;
+}
+
+.strip-rows {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--sp-2);
+  row-gap: 2px;
+  margin: 0;
+  font-size: var(--fs-small);
+  line-height: 1.3;
+}
+
+.strip-rows dt {
+  font-size: var(--fs-meta);
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--wb-muted);
+}
+
+.strip-rows dd {
+  margin: 0;
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--wb-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Face -> details */

@@ -1,12 +1,12 @@
 <script setup>
-import LedBoard from '~/components/ui/LedBoard.vue';
+import BusStopPole from '~/components/landing/BusStopPole.vue';
 </script>
 
 <template>
     <section class="container landing-section">
         <div class="cta-box row align-items-center gx-0 gy-4 gx-lg-5">
             <div class="col-lg-6">
-                <LedBoard :messages="[['YOUR NEXT STOP', 'IS WAITING'], ['ONE SPIN', 'ONE NEW STOP']]" label="Your next stop is waiting" />
+                <BusStopPole tone="ink" />
             </div>
             <div class="col-lg-6">
                 <h2 class="section-title cta-title mb-0">Free for a couple of hours?</h2>
