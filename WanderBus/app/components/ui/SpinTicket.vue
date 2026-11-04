@@ -4,6 +4,13 @@
 
   `compact`: a small, already-torn ticket strip (bus, board at, get off at, ride) for the passport
   memory card. Not interactive: no stub, no tilt, no focus stop, no reset button. Reads at ~260px.
+
+  `band`: the travel-time band from the belt (TicketBelt's bandFor), so the torn ticket keeps the
+  colour it rode in on. short = green stub with white text (5.39:1), medium = amber stub with ink
+  text (8.45:1), long = ink stub with white text (17.1:1). The default is short (green).
+
+  Horizontal tickets are drawn at the container's own width (from 280px up to 580px), so the right
+  edge meets its container's edge.
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -28,8 +35,18 @@ const props = defineProps({
     /** Heading level of the ticket title, so it fits the page outline (2–6). */
     headingLevel: { type: Number, default: 2, validator: (n) => n >= 2 && n <= 6 },
     /** Mini, non-interactive strip of the torn ticket (passport memory card). Ignores orientation. */
-    compact: { type: Boolean, default: false }
+    compact: { type: Boolean, default: false },
+    /** Travel-time band: 'short' (green), 'medium' (amber) or 'long' (ink). Colours the stub and accents. */
+    band: { type: String, default: 'short', validator: (b) => ['short', 'medium', 'long'].includes(b) }
 })
+
+// Stub fill and the text on it; each pair is at least 4.5:1.
+const BAND_COLOURS = {
+    short: { fill: 'var(--wb-green)', ink: 'var(--wb-on-ink)' },
+    medium: { fill: 'var(--wb-amber)', ink: 'var(--wb-ink)' },
+    long: { fill: 'var(--wb-ink)', ink: 'var(--wb-on-ink)' }
+}
+const colours = computed(() => BAND_COLOURS[props.band] ?? BAND_COLOURS.short)
 
 const emit = defineEmits(['tear'])
 
@@ -103,6 +120,7 @@ function onTear() {
         ref="wrap"
         class="spin-ticket"
         :class="{ 'spin-ticket--narrow': narrow, 'spin-ticket--vertical': vertical, 'spin-ticket--strip': compact }"
+        :style="{ '--st-accent': colours.fill, '--st-on-accent': colours.ink }"
     >
         <!-- border-width 4 shows a 2px ink outline: the paper covers the stroke's inner half. -->
         <TearTicket
@@ -116,7 +134,7 @@ function onTear() {
             :notch="compact ? 6 : 9"
             :radius="compact ? 12 : 16"
             background="var(--wb-surface)"
-            stub-background="var(--wb-green)"
+            :stub-background="colours.fill"
             border-color="var(--wb-ink)"
             :border-width="4"
             :recenter="!vertical && !compact"
@@ -218,14 +236,14 @@ function onTear() {
   position: absolute;
   inset: 0;
   padding: var(--sp-5);
-  border-left: 6px solid var(--wb-green);
+  border-left: 6px solid var(--st-accent, var(--wb-green));
   overflow: hidden;
 }
 
 .spin-ticket--vertical .ticket-body {
   padding: 20px;
   border-left: 0;
-  border-top: 6px solid var(--wb-green);
+  border-top: 6px solid var(--st-accent, var(--wb-green));
 }
 
 .ticket-face,
@@ -326,7 +344,7 @@ function onTear() {
   align-items: center;
   justify-content: center;
   padding-left: 6px;
-  color: var(--wb-on-ink); /* white on --wb-green, 5.39:1 */
+  color: var(--st-on-accent, var(--wb-on-ink)); /* white on green 5.39:1, ink on amber 8.45:1, white on ink 17.1:1 */
 }
 
 .spin-ticket--vertical .ticket-stub {

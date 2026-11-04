@@ -170,7 +170,9 @@ onBeforeUnmount(() => {
         Skip the ride
         <i class="bi bi-skip-forward-fill" aria-hidden="true"></i>
       </button>
-      <p v-else class="stop-hint mb-0">
+      <!-- No hint on the ink band: there it would sit above the CTA heading like a kicker, and the
+           LED already rotates TAP TO BOARD (the button is labelled "Board WanderBus"). -->
+      <p v-else-if="props.tone !== 'ink'" class="stop-hint mb-0">
         <i class="bi bi-hand-index" aria-hidden="true"></i>
         Tap the sign to board
       </p>

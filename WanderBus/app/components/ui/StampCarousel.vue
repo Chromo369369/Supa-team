@@ -1,36 +1,58 @@
 <!--
-  StampCarousel: the passport as a line of ink-stamped discs (design.md §4.5). Each saved trip is
-  one paper disc printed with its stamp. The chosen disc sits in the middle; earlier trips shrink
-  away down to the left and the next one leans in from the top right. Moving along, every disc
-  rolls like a wheel and swings into its new pose, and the chosen trip slides out below as a
-  memory card: photo, stop name and date, the compact ticket strip, the stamp and the note.
+  StampCarousel: the passport as a wall of glossy rubber stamps (design.md §4.5). One stamp per
+  saved trip, all on one full-height stage with three phases:
+    1. Scatter wall: every stamp lies loose and slightly turned across the stage, so many trips
+       show at once.
+    2. Cascade: scrolling the page through the stage (the stage stays pinned while it morphs), or
+       pressing "Line them up", gathers the stamps into the slanted cascade line.
+    3. Zoom: choosing a stamp (click, swipe, Previous / Next, the arrow keys) zooms it, centred
+       right, and its details open top left: stop name, bus, from, set off, time taken, date,
+       the note, then the page's editor and Edit / Delete trip buttons (slots).
 
-  Ported to Vue 3 from "3D CD Disc Carousel" (Disc Cascade Carousel) by kedhareswer, 21st.dev
-  (component id 35505): https://21st.dev/kedhareswer/disc-cascade-carousel. Used as part of this
-  application only. Changes for WanderBus: Vue port with no React and no Tailwind; the pose maths
-  (slanted line, rise, depth, yaw, fan, tilt and roll per step) is kept, but the two-spring rAF
-  engine is replaced by CSS transitions on --ease; generated disc labels become paper discs
-  printed with an SVG ink stamp in --wb-green; the editorial credits and press quotes become the
-  memory card; no wordmark, nav, index menu, sheen or frame; tokens from main.css only.
+  Ported to Vue 3 from two 21st.dev components, used as part of this application only:
+  - "3D CD Disc Carousel" (Disc Cascade Carousel) by kedhareswer, component id 35505,
+    https://21st.dev/kedhareswer/disc-cascade-carousel. Kept: the cascade pose maths (spacing,
+    rise, depth, yaw, fan, tilt and roll per step), the gloss (back-set edge, soft shade, conic
+    sheen glint driven by pointer and yaw with mix-blend-mode: screen, inset highlight rings, the
+    chosen disc leaning toward the pointer by up to 12 degrees), the seeded PRNG, the top-left
+    details head and the bottom-right controls.
+  - "Scroll Morph Hero" by prashantsom75, component id 9583,
+    https://21st.dev/@prashantsom75/components/scroll-morph-hero. Kept: the scatter-to-formation
+    morph (each item lerps from its scatter pose to its formation pose by one morph value), driven
+    by scroll progress and smoothed with the source's spring (stiffness 40, damping 20).
+  Changes for WanderBus: Vue SFC with no React, Tailwind or framer-motion; real page scroll through
+  a sticky stage instead of a captured wheel; the scatter is a seeded, jittered grid (from the trip
+  id) instead of Math.random, and the circle and arc phases become the disc cascade; CDs become ink
+  stamps with a scalloped edge and no centre hole or hub; the details head shows trip facts with
+  spacing and tone steps instead of hairline rows; no wordmark, nav, index menu, frame, press
+  quotes or autoplay; CSS transitions on --ease between poses; 44px controls; tokens from main.css
+  only.
+  Round 2 (boss, 5 Nov 2026):
+  - Centre art is the trip photo clipped to the inner circle; with no photo, a still WanderMascot
+    (no gaze, blink or motion) on a flat tint, its colour picked from the trip id. The source's
+    seven generated label patterns are removed, and so is the opaque centre plate.
+  - Rim text: the stop name on the top arc, "BUS 12 · 5 NOV" or "ON FOOT · 5 NOV" upright on the
+    bottom arc; WANDERBUS joins the top line only for short names (see the rim layout note).
+  - Notes are set in the app font (--font-ui) at 16px instead of the handwriting face.
 
   Props
     items   passport_entries rows (id, end_stop, entry_time, bus_taken, starting_stop,
             starting_location, time_taken, entry_notes, photo_url)
     label   accessible name of the carousel
   Slots (scoped, { item, index })
-    actions   buttons under the memory card (edit / delete live in the page)
     editor    the in-place editor for that trip
+    actions   buttons under the details (Edit / Delete trip live in the page)
 
-  Accessibility: APG carousel pattern. The root is aria-roledescription="carousel"; the memory
-  card is the slide ("2 of 5: Blk 55"). Left / Right / Home / End move between trips while focus
-  is in the carousel (never from inside a form field). Previous / Next buttons are 44px. The
-  only thing that plays on its own is the slow spin of the chosen stamp, and the pause button
-  stops it. Changes are announced through a polite status line. Under prefers-reduced-motion
-  there is no deal-in, roll, swing, fall or spin: every change is instant.
+  Accessibility: APG carousel pattern. The root is aria-roledescription="carousel"; the details
+  panel is the slide ("2 of 5: Blk 55"). Left / Right / Home / End move between trips while focus
+  is in the carousel (never from inside a form field) and Escape closes the details. Previous /
+  Next are 44px buttons. Nothing plays on its own. Changes are announced through a polite status
+  line. Pointer effects (tilt, glint) only follow a fine pointer. Under prefers-reduced-motion
+  there is no scatter, morph, deal-in, roll or fall: the stamps start in the cascade with the first
+  trip open, and every change is instant.
 -->
 <script setup>
 import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, useId, watch } from 'vue'
-import SpinTicket from '~/components/ui/SpinTicket.vue'
 import { useMotionPrefs } from '~/composables/usePointer'
 
 const props = defineProps({
@@ -38,43 +60,287 @@ const props = defineProps({
   label: { type: String, default: 'Your trips' }
 })
 
-const uid = `sc${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`
-const { reducedMotion } = useMotionPrefs()
+const uid = `sc${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+const { reducedMotion, canTrack } = useMotionPrefs()
 
-/* ── pose maths, from the source's poseOf() ── */
-const POSE = { spacing: 1.02, rise: 0.24, depth: 0.42, yaw: 22, fan: -10, tilt: -6, roll: 110 }
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
+const lerp = (a, b, t) => a * (1 - t) + b * t
 
-function poseOf(d) {
-  const near = Math.min(d, 2.2)
-  return {
-    transform:
-      `translate3d(calc(${(d * POSE.spacing).toFixed(4)} * var(--sc-s)), calc(${(-d * POSE.rise).toFixed(4)} * var(--sc-s)), ` +
-      `calc(${(near * POSE.depth).toFixed(4)} * var(--sc-s))) rotateZ(${POSE.tilt}deg) rotateY(${(POSE.yaw + d * POSE.fan).toFixed(2)}deg) rotateX(8deg)`,
-    zIndex: 100 + Math.round(d * 10),
-    opacity: d < -2.5 ? Math.max(0, 1 - (-d - 2.5) / 1.2) : 1,
-    hidden: d < -4 || d > 2.8,
-    roll: `${(d * POSE.roll).toFixed(1)}deg`
+/** Small deterministic PRNG (from the disc source), so a stamp looks the same on every render. */
+function rng(seed) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+function hashOf(v) {
+  let x = 2166136261
+  for (const c of String(v ?? '')) {
+    x ^= c.charCodeAt(0)
+    x = Math.imul(x, 16777619)
+  }
+  return x >>> 0
 }
 
 /* ── which trip is chosen (tracked by id, so a reload keeps your place) ── */
 const index = ref(0)
 const currentId = ref(props.items[0]?.id)
-const rail = ref(null)
 const n = computed(() => props.items.length)
 const active = computed(() => props.items[index.value] ?? null)
 const cardTransition = ref('sc-next')
 
+const rootEl = ref(null)
+const track = ref(null)
+const stage = ref(null)
+const scene = ref(null)
+const mounted = ref(false)
+
+/* ── phases: scatter → cascade (lined) → zoom ── */
+const lined = ref(false)        // latched once the morph completes, or by "Line them up"
+const zoomed = ref(false)       // the chosen stamp is zoomed and its details are open
+const scrollMorph = ref(0)      // 0..1 from the page scroll through the pinned stage
+const morph = ref(0)            // the smoothed value every pose lerps by
+const springing = ref(false)
+
+const canScatter = computed(() => mounted.value && !reducedMotion.value && n.value > 1)
+const scrollMorphOn = computed(() => canScatter.value && !lined.value)
+const morphTarget = computed(() => (scrollMorphOn.value ? scrollMorph.value : 1))
+const phase = computed(() => (morph.value < 0.985 ? 'scatter' : zoomed.value ? 'zoom' : 'cascade'))
+const showDetails = computed(() => phase.value === 'zoom' && !!active.value)
+
+// The source's spring (stiffness 40, damping 20), stepped by requestAnimationFrame while it moves.
+let raf = 0
+let vel = 0
+let last = 0
+function step(t) {
+  raf = 0
+  const dt = Math.min(0.05, Math.max(0, (t - last) / 1000))
+  last = t
+  const target = morphTarget.value
+  const a = -40 * (morph.value - target) - 20 * vel
+  vel += a * dt
+  morph.value = clamp(morph.value + vel * dt, 0, 1)
+  if (Math.abs(target - morph.value) < 0.004 && Math.abs(vel) < 0.01) {
+    morph.value = target
+    vel = 0
+    springing.value = false
+    return
+  }
+  raf = requestAnimationFrame(step)
+}
+function kick() {
+  if (typeof window === 'undefined') return
+  if (reducedMotion.value) {
+    morph.value = morphTarget.value
+    vel = 0
+    return
+  }
+  if (raf || morph.value === morphTarget.value) return
+  springing.value = true
+  last = performance.now()
+  raf = requestAnimationFrame(step)
+}
+watch(morphTarget, kick)
+
+/* Line up or scatter, keeping the stage where it is on screen while the scroll track changes. */
+async function setLined(v) {
+  if (lined.value === v) return
+  const before = stage.value?.getBoundingClientRect().top
+  lined.value = v
+  if (!v) {
+    zoomed.value = false
+    scrollMorph.value = 0
+  }
+  await nextTick()
+  const el = stage.value
+  if (!el || before == null) return
+  if (v) {
+    const after = el.getBoundingClientRect().top
+    if (Math.abs(after - before) > 1) window.scrollBy({ top: after - before, behavior: 'instant' })
+  } else {
+    // Back to the top of the track, so the scroll morph starts again from the wall.
+    const stick = parseFloat(getComputedStyle(el).top) || 0
+    const top = track.value?.getBoundingClientRect().top ?? 0
+    if (top < stick - 1) window.scrollBy({ top: top - stick, behavior: 'instant' })
+    readScroll()
+  }
+}
+const toggleLined = () => setLined(!lined.value)
+
+/* ── scroll progress through the pinned stage ── */
+let scrollFrame = 0
+function readScroll() {
+  scrollFrame = 0
+  if (!scrollMorphOn.value || !track.value || !stage.value) return
+  const travel = track.value.offsetHeight - stage.value.offsetHeight
+  if (travel <= 0) return
+  const stick = parseFloat(getComputedStyle(stage.value).top) || 0
+  const p = clamp((stick - track.value.getBoundingClientRect().top) / travel, 0, 1)
+  const t = clamp(p / 0.85, 0, 1)
+  scrollMorph.value = t * t * (3 - 2 * t)
+  if (p >= 0.999) setLined(true)
+}
+function onScroll() {
+  if (!scrollFrame) scrollFrame = requestAnimationFrame(readScroll)
+}
+watch(scrollMorphOn, (on) => {
+  if (typeof window === 'undefined') return
+  if (on) {
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll, { passive: true })
+    nextTick(readScroll)
+  } else {
+    window.removeEventListener('scroll', onScroll)
+    window.removeEventListener('resize', onScroll)
+  }
+})
+
+/* ── stage size ── */
+const size = reactive({ w: 960, h: 640 })
+let sizeObserver = null
+const wide = computed(() => size.w >= 640)
+const s = computed(() =>
+  wide.value
+    ? clamp(Math.min(size.w * 0.22, size.h * 0.4), 140, 260)
+    : clamp(Math.min(size.w * 0.42, size.h * 0.42), 110, 200)
+)
+
+function startAt() {
+  // Reduced motion, or a single trip: no wall, straight to the line with the trip open.
+  if (reducedMotion.value || n.value <= 1) {
+    lined.value = true
+    zoomed.value = true
+    morph.value = 1
+  }
+}
+onMounted(() => {
+  mounted.value = true
+  startAt()
+  if (scene.value && typeof ResizeObserver !== 'undefined') {
+    sizeObserver = new ResizeObserver(([e]) => {
+      size.w = e.contentRect.width
+      size.h = e.contentRect.height
+      onScroll()
+    })
+    sizeObserver.observe(scene.value)
+  }
+})
+watch(reducedMotion, (on) => {
+  if (on) {
+    lined.value = true
+    morph.value = 1
+  }
+})
+onBeforeUnmount(() => {
+  if (raf) cancelAnimationFrame(raf)
+  if (scrollFrame) cancelAnimationFrame(scrollFrame)
+  sizeObserver?.disconnect()
+  noteObserver?.disconnect()
+  window.removeEventListener('scroll', onScroll)
+  window.removeEventListener('resize', onScroll)
+})
+
+/* ── poses ── */
+// Cascade, from the disc source's poseOf(): spacing, rise, depth, yaw, fan, tilt, roll per step.
+const POSE = { spacing: 1.02, rise: 0.24, depth: 0.42, yaw: 22, fan: -10, tilt: -6, roll: 110 }
+
+function cascadePose(d, z) {
+  const S = s.value
+  const near = Math.min(d, 2.2)
+  const ox = z && wide.value ? size.w * 0.16 : 0
+  const oy = size.h * (wide.value ? 0.04 : 0.02)
+  const push = d === 0 ? 0 : Math.sign(d) * 0.3 * z
+  const zoomScale = wide.value ? 1.35 : 1.25
+  return {
+    x: (d * POSE.spacing + push) * S + ox,
+    y: -d * POSE.rise * S + oy,
+    tz: near * POSE.depth * S + (d === 0 ? z * 0.2 * S : 0),
+    rz: d === 0 ? POSE.tilt + z * 3 : POSE.tilt,
+    ry: POSE.yaw + d * POSE.fan - (d === 0 ? z * 14 : 0),
+    rx: 8,
+    sc: d === 0 ? lerp(1, zoomScale, z) : 1,
+    op: d < -2.5 ? Math.max(0, 1 - (-d - 2.5) / 1.2) : 1,
+    hidden: d < -4 || d > 2.8,
+    roll: d * POSE.roll
+  }
+}
+
+// Scatter wall: a jittered grid seeded by each trip's id, so the wall is the same on every visit.
+const scatter = computed(() => {
+  const W = size.w
+  const H = size.h
+  const N = n.value
+  const pad = Math.max(16, Math.min(W, H) * 0.05)
+  const aw = Math.max(1, W - pad * 2)
+  const ah = Math.max(1, H - pad * 2 - 64) // keep the controls clear
+  let cols = Math.max(1, Math.round(Math.sqrt((N * aw) / ah)))
+  const rows = Math.ceil(N / cols)
+  cols = Math.ceil(N / rows)
+  const cw = aw / cols
+  const ch = ah / rows
+  const base = clamp((Math.min(cw, ch) * 0.9) / s.value, 0.3, 0.95)
+  return props.items.map((t, i) => {
+    const r = rng(hashOf(t.id) + 7)
+    const col = i % cols
+    const row = Math.floor(i / cols)
+    const inRow = row === rows - 1 ? N - row * cols : cols
+    const cx = pad + ((cols - inRow) * cw) / 2 + (col + 0.5) * cw + (r() - 0.5) * cw * 0.3
+    const cy = pad + (row + 0.5) * ch + (r() - 0.5) * ch * 0.3
+    return { x: cx - W / 2, y: cy - H / 2, tz: 0, rz: (r() - 0.5) * 24, ry: 0, rx: 0, sc: base * (0.92 + r() * 0.12), roll: (r() - 0.5) * 40 }
+  })
+})
+
+const poses = computed(() => {
+  const m = morph.value
+  const z = zoomed.value ? 1 : 0
+  const S = s.value
+  return props.items.map((_, i) => {
+    const d = i - index.value
+    const c = cascadePose(d, z)
+    const a = scatter.value[i]
+    const settled = m >= 0.985
+    const x = lerp(a.x, c.x, m)
+    const ry = lerp(a.ry, c.ry, m)
+    const f = (v) => v.toFixed(2)
+    return {
+      transform:
+        `translate3d(${f(x)}px, ${f(lerp(a.y, c.y, m))}px, ${f(lerp(a.tz, c.tz, m))}px) ` +
+        `rotateZ(${f(lerp(a.rz, c.rz, m))}deg) rotateY(${f(ry)}deg) rotateX(${f(lerp(a.rx, c.rx, m))}deg) scale(${lerp(a.sc, c.sc, m).toFixed(3)})`,
+      zIndex: m < 0.5 ? 10 + i : d === 0 && z ? 200 : 100 + Math.round(d * 10),
+      opacity: lerp(1, c.hidden ? 0 : c.op, m),
+      hidden: settled && c.hidden,
+      roll: `${f(lerp(a.roll, c.roll, m))}deg`,
+      glint: `${f(ry * 3 + (x / S) * 40)}deg`
+    }
+  })
+})
+const dealDelay = (i) => `${Math.min(i, 12) * 70}ms`
+
+/* ── moving between trips ── */
 function go(i) {
   if (!n.value) return
-  const next = Math.min(Math.max(i, 0), n.value - 1)
+  const next = clamp(i, 0, n.value - 1)
   if (next === index.value) return
   cardTransition.value = next > index.value ? 'sc-next' : 'sc-prev'
   index.value = next
   currentId.value = props.items[next]?.id
 }
-const prev = () => go(index.value - 1)
-const next = () => go(index.value + 1)
+function select(i) {
+  go(i)
+  zoomed.value = true
+  if (!lined.value) setLined(true)
+}
+const prev = () => select(index.value - 1)
+const next = () => select(index.value + 1)
+
+function closeDetails() {
+  zoomed.value = false
+  nextTick(() => scene.value?.focus({ preventScroll: true }))
+}
 
 watch(
   () => props.items.map((t) => t.id),
@@ -83,7 +349,7 @@ watch(
     if (pos >= 0) {
       index.value = pos
     } else {
-      // The chosen trip is gone (deleted after the confirm): its card falls and the next one deals in.
+      // The chosen trip is gone (deleted after the confirm): its stamp falls and the next one opens.
       if (old?.includes(currentId.value)) cardTransition.value = 'sc-fall'
       index.value = Math.min(index.value, Math.max(ids.length - 1, 0))
     }
@@ -91,26 +357,31 @@ watch(
   }
 )
 
-// A deleted card takes its Delete button with it: keep focus in the carousel instead of dropping it.
+// A deleted trip takes its Delete button with it: keep focus in the carousel instead of dropping it.
 function onCardAfterLeave() {
   const el = document.activeElement
-  if (!el || el === document.body) rail.value?.focus({ preventScroll: true })
+  if (!el || el === document.body) scene.value?.focus({ preventScroll: true })
 }
 
 function onKey(e) {
   if (e.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return
-  const keys = { ArrowLeft: prev, ArrowRight: next, Home: () => go(0), End: () => go(n.value - 1) }
+  if (e.key === 'Escape' && zoomed.value) {
+    e.preventDefault()
+    closeDetails()
+    return
+  }
+  const keys = { ArrowLeft: prev, ArrowRight: next, Home: () => select(0), End: () => select(n.value - 1) }
   const run = keys[e.key]
   if (!run) return
   e.preventDefault()
   run()
 }
 
-/* ── swipe on the disc line (taps fall through to the disc buttons) ── */
+/* ── swipe on the stage (taps fall through to the stamp buttons) ── */
 let swipe = null
 let swallowClick = false
 function onPointerDown(e) {
-  if (e.button !== 0) return
+  if (e.button !== 0 || e.target?.closest?.('.sc-controls')) return
   swipe = { x: e.clientX, y: e.clientY }
 }
 function onPointerUp(e) {
@@ -119,7 +390,7 @@ function onPointerUp(e) {
   const dy = e.clientY - swipe.y
   swipe = null
   if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
-    // Swallow the click this release would fire on a disc, and only that one.
+    // Swallow the click this release would fire on a stamp, and only that one.
     swallowClick = true
     setTimeout(() => { swallowClick = false }, 0)
     // The line climbs to the right, so dragging left brings the next trip in.
@@ -131,14 +402,26 @@ function onDiscClick(i) {
     swallowClick = false
     return
   }
-  go(i)
+  select(i)
 }
 
-/* ── idle spin of the chosen stamp: the one thing that plays by itself ── */
-const paused = ref(false)
-const spinning = computed(() => !paused.value && !reducedMotion.value)
+/* ── the glint and the chosen stamp's lean follow a mouse, never a finger ── */
+function onPointerMove(e) {
+  if (!canTrack.value || e.pointerType !== 'mouse' || !scene.value || !rootEl.value) return
+  const r = scene.value.getBoundingClientRect()
+  const ox = zoomed.value && wide.value ? size.w * 0.16 : 0
+  const span = s.value * 1.5
+  const px = clamp((e.clientX - (r.left + r.width / 2 + ox)) / span, -1, 1)
+  const py = clamp((e.clientY - (r.top + r.height / 2)) / span, -1, 1)
+  rootEl.value.style.setProperty('--sc-px', px.toFixed(3))
+  rootEl.value.style.setProperty('--sc-py', py.toFixed(3))
+}
+function onPointerLeave() {
+  rootEl.value?.style.setProperty('--sc-px', '0')
+  rootEl.value?.style.setProperty('--sc-py', '0')
+}
 
-/* ── memory card bits ── */
+/* ── trip facts ── */
 const isBus = (t) => !!t?.bus_taken && t.bus_taken !== 'Walk'
 const stopName = (t) => t?.end_stop || 'Your destination'
 const dateOf = (t) => (t?.entry_time ? new Date(t.entry_time) : null)
@@ -146,6 +429,25 @@ const formatDate = (t) =>
   dateOf(t)?.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) ?? ''
 const formatTime = (t) =>
   dateOf(t)?.toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }) ?? ''
+const formatDuration = (mins) => {
+  if (mins == null || mins === '') return ''
+  if (mins < 60) return `${mins} min`
+  const hr = Math.floor(mins / 60)
+  const m = mins % 60
+  return m ? `${hr} hr ${m} min` : `${hr} hr`
+}
+const facts = computed(() => {
+  const t = active.value
+  if (!t) return []
+  return [
+    { label: 'Bus', value: isBus(t) ? String(t.bus_taken) : 'Walked', num: isBus(t) },
+    { label: 'From', value: t.starting_stop || t.starting_location || '' },
+    { label: 'Set off', value: formatTime(t), num: true },
+    { label: 'Time taken', value: formatDuration(t.time_taken), num: true },
+    { label: 'Date', value: formatDate(t), num: true }
+  ].filter((f) => f.value)
+})
+const pad2 = (v) => String(v).padStart(2, '0') // taste-skill-ignore: the "01 / 07" counter is a control readout the boss asked for
 
 // Photo failures are remembered per URL, so a replaced photo gets a fresh try.
 const failed = reactive({})
@@ -167,74 +469,159 @@ function measureNote() {
   if (expanded[active.value?.id]) return
   overflowing.value = el.scrollHeight > el.clientHeight + 2
 }
-function watchNote(el) {
+watch(noteEl, (el) => {
   noteObserver?.disconnect()
   if (el && typeof ResizeObserver !== 'undefined') {
     noteObserver = new ResizeObserver(measureNote)
     noteObserver.observe(el)
   }
-}
-watch(noteEl, (el) => {
-  watchNote(el)
   nextTick(measureNote)
 })
 watch(() => [active.value?.id, active.value?.entry_notes], () => nextTick(measureNote))
-onMounted(() => {
-  nextTick(measureNote)
-  document.fonts?.ready.then(measureNote)
-})
-onBeforeUnmount(() => noteObserver?.disconnect())
+onMounted(() => document.fonts?.ready.then(measureNote))
 
-/* ── deal-in order: left to right along the visible part of the line ── */
-const poses = computed(() => props.items.map((_, i) => poseOf(i - index.value)))
-const dealDelay = (i) => `${Math.min(Math.max(i - index.value + 4, 0), 7) * 70}ms`
+/* ── the stamp face ── */
+// A scalloped edge: 40 small half-circles round a 92-unit circle in the 200-unit stamp.
+const SCALLOP = (() => {
+  const N = 40
+  const R = 92
+  const b = R * Math.sin(Math.PI / N)
+  const pt = (k) => {
+    const a = (k / N) * Math.PI * 2
+    return `${(100 + R * Math.cos(a)).toFixed(2)} ${(100 + R * Math.sin(a)).toFixed(2)}`
+  }
+  let d = `M ${pt(0)}`
+  for (let k = 1; k <= N; k++) d += ` A ${b.toFixed(2)} ${b.toFixed(2)} 0 0 1 ${pt(k)}`
+  return `${d} Z`
+})()
 
-/* ── the ink stamp: stop name round the rim, date in the middle ── */
+const Scallop = {
+  name: 'StampScallop',
+  render: () => h('svg', { viewBox: '0 0 200 200', 'aria-hidden': 'true', focusable: 'false' }, [
+    h('path', { d: SCALLOP, style: { fill: 'currentColor' } })
+  ])
+}
+
+// The seven generated label patterns (sunburst, rings, halftone, horizon, stripes, eclipse, mosaic)
+// are gone: with no photo the centre is the mascot.
+// Kept in view: aesthetic label images like the original Disc Cascade Carousel's (boss, 5 Nov 2026).
+
+// No-photo mascot colours: one pair per trip, picked by hashOf(trip id) % 7, so a stamp keeps its
+// colour on every visit but the wall isn't all green. Each pair is a token and its flat tint.
+const MASCOT_COLORS = [
+  ['var(--wb-green)', 'var(--wb-green-tint)'],
+  ['var(--wb-amber)', 'var(--wb-amber-tint)'],
+  ['var(--cat-food)', 'var(--cat-food-tint)'],
+  ['var(--cat-nature)', 'var(--cat-nature-tint)'],
+  ['var(--cat-heritage)', 'var(--cat-heritage-tint)'],
+  ['var(--cat-art)', 'var(--cat-art-tint)'],
+  ['var(--cat-shopping)', 'var(--cat-shopping-tint)']
+]
+
+// A still WanderMascot, drawn from WanderMascot.vue's geometry (orb, shine, capsule eyes, smile,
+// nub arms). Drawn here rather than mounting the component, so it never blinks, gazes or hops.
+function mascotArt(color, tint) {
+  const line = { stroke: 'var(--wb-ink)', strokeWidth: 2.5 }
+  return [
+    h('rect', { x: -10, y: -6, width: 120, height: 120, style: { fill: tint } }),
+    h('ellipse', { cx: 13, cy: 64, rx: 7, ry: 10, style: { fill: color, ...line } }),
+    h('ellipse', { cx: 87, cy: 64, rx: 7, ry: 10, style: { fill: color, ...line } }),
+    h('circle', { cx: 50, cy: 54, r: 40, style: { fill: color, ...line } }),
+    h('ellipse', { cx: 35, cy: 32, rx: 10, ry: 5.5, transform: 'rotate(-28 35 32)', style: { fill: 'var(--wb-surface)', opacity: 0.22 } }),
+    h('rect', { x: 31.5, y: 38, width: 9, height: 16, rx: 4.5, style: { fill: 'var(--wb-ink)' } }),
+    h('rect', { x: 59.5, y: 38, width: 9, height: 16, rx: 4.5, style: { fill: 'var(--wb-ink)' } }),
+    h('path', { d: 'M43 66 Q50 72 57 66', style: { fill: 'none', stroke: 'var(--wb-ink)', strokeWidth: 3.5, strokeLinecap: 'round' } })
+  ]
+}
+
+/*
+  Rim layout (200-unit stamp; ink rings at r 86 and 80 outside, the dashed ring at r 65.5 inside):
+  - Top arc, r 70, 200 degrees over the top, read left to right: the stop name. WANDERBUS is added
+    after it only when the name is 12 characters or fewer, so the whole line fits without squeezing.
+  - Bottom arc, r 77, 140 degrees under the bottom, drawn left to right the short way round so the
+    letters stand upright (their tops point at the centre): "BUS 12 · 5 NOV" or "ON FOOT · 5 NOV".
+  - A 10 degree gap and an ink dot at each side keep the two lines apart.
+  - A line longer than its arc is squeezed to fit (textLength); stop names over 32 characters are
+    cut with an ellipsis first, so the type never drops below about 70% of its width.
+*/
+const RIM_FS = 12.5
+const CHAR_W = RIM_FS * 0.72 // a capital plus the .12em tracking, measured loosely for Lexend Deca
+const polar = (r, deg) => {
+  const a = (deg * Math.PI) / 180
+  return `${(100 + r * Math.cos(a)).toFixed(2)} ${(100 + r * Math.sin(a)).toFixed(2)}`
+}
+const ARC_TOP = { r: 70, span: 200 } // 170 to 10 degrees clockwise (SVG angles, y down) over the top
+const ARC_BOTTOM = { r: 77, span: 140 } // 160 to 20 degrees anticlockwise under the bottom
+const TOP_PATH = `M ${polar(ARC_TOP.r, 170)} A ${ARC_TOP.r} ${ARC_TOP.r} 0 1 1 ${polar(ARC_TOP.r, 10)}`
+const BOTTOM_PATH = `M ${polar(ARC_BOTTOM.r, 160)} A ${ARC_BOTTOM.r} ${ARC_BOTTOM.r} 0 0 0 ${polar(ARC_BOTTOM.r, 20)}`
+const roomOf = (arc) => ((arc.span / 360) * 2 * Math.PI * arc.r * 0.92)
+const TOP_ROOM = roomOf(ARC_TOP)
+const BOTTOM_ROOM = roomOf(ARC_BOTTOM)
+
+function rimTop(t) {
+  let name = stopName(t).toUpperCase()
+  if (name.length > 32) name = `${name.slice(0, 31).trimEnd()}…`
+  return name.length <= 12 ? `${name} · WANDERBUS` : name
+}
+function rimBottom(t) {
+  const d = dateOf(t)
+  const day = d ? d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }).toUpperCase() : ''
+  const head = isBus(t) ? `BUS ${t.bus_taken}` : 'ON FOOT'
+  return day ? `${head} · ${day}` : head
+}
+const fit = (text, room) => (text.length * CHAR_W > room ? { textLength: room.toFixed(0), lengthAdjust: 'spacingAndGlyphs' } : {})
+
 let stampSeq = 0
-const InkStamp = {
-  name: 'InkStamp',
-  props: { trip: { type: Object, required: true }, rough: { type: Boolean, default: true } },
+const StampFace = {
+  name: 'StampFace',
+  props: { trip: { type: Object, required: true } },
   setup(p) {
-    const id = `${uid}-stamp-${++stampSeq}`
+    const id = `${uid}-face-${++stampSeq}`
     return () => {
       const t = p.trip
-      const d = dateOf(t)
-      const day = d ? d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }).toUpperCase() : 'SOMEDAY'
-      const year = d ? String(d.getFullYear()) : ''
-      const name = stopName(t).toUpperCase()
-      const rim = `${name}  ·  WANDERBUS  · `
-      // Rim text sits on a 72-unit circle; squeeze long names so they never overlap themselves.
-      const room = 2 * Math.PI * 72 * 0.94
-      const natural = rim.length * 13 * 0.62
-      const head = isBus(t) ? `BUS ${t.bus_taken}` : 'ON FOOT'
-      return h('svg', { class: 'ink-stamp', viewBox: '0 0 200 200', 'aria-hidden': 'true', focusable: 'false' }, [
-        h('defs', [
-          h('path', { id: `${id}-rim`, d: 'M 100 100 m -72 0 a 72 72 0 1 1 144 0 a 72 72 0 1 1 -144 0' }),
-          p.rough
-            ? h('filter', { id: `${id}-ink`, x: '-5%', y: '-5%', width: '110%', height: '110%' }, [
-                h('feTurbulence', { type: 'fractalNoise', baseFrequency: '0.9', numOctaves: '2', seed: String((t.id ?? 1) % 97), result: 'n' }),
-                h('feDisplacementMap', { in: 'SourceGraphic', in2: 'n', scale: '2.4' })
-              ])
-            : null
-        ]),
-        h('g', { filter: p.rough ? `url(#${id}-ink)` : undefined, fill: 'none', stroke: 'currentColor' }, [
-          h('circle', { cx: 100, cy: 100, r: 92, 'stroke-width': 5 }),
-          h('circle', { cx: 100, cy: 100, r: 84, 'stroke-width': 1.5 }),
-          h('circle', { cx: 100, cy: 100, r: 56, 'stroke-width': 2.5, 'stroke-dasharray': '2 4' }),
-          h('path', { d: 'M 62 92 H 138 M 62 128 H 138', 'stroke-width': 1.5 }),
-          h('text', { class: 'ink-rim', fill: 'currentColor', stroke: 'none', 'font-size': 13 }, [
-            h('textPath', {
-              href: `#${id}-rim`,
-              startOffset: '25%',
-              'text-anchor': 'middle',
-              ...(natural > room ? { textLength: room.toFixed(0), lengthAdjust: 'spacingAndGlyphs' } : {})
-            }, rim)
-          ]),
-          h('text', { class: 'ink-head', x: 100, y: 84, 'text-anchor': 'middle', fill: 'currentColor', stroke: 'none', 'font-size': 12 }, head),
-          h('text', { class: 'ink-day', x: 100, y: 120, 'text-anchor': 'middle', fill: 'currentColor', stroke: 'none', 'font-size': 26 }, day),
-          h('text', { class: 'ink-year', x: 100, y: 146, 'text-anchor': 'middle', fill: 'currentColor', stroke: 'none', 'font-size': 13 }, year)
+      const [color, tint] = MASCOT_COLORS[hashOf(t.id) % MASCOT_COLORS.length]
+      const top = rimTop(t)
+      const bottom = rimBottom(t)
+      const ink = { fill: 'none', stroke: 'currentColor' }
+      const rimText = (path, text, room) =>
+        h('text', { class: 'ink-rim', 'font-size': RIM_FS, style: { fill: 'currentColor' } }, [
+          h('textPath', { href: `#${id}-${path}`, startOffset: '50%', 'text-anchor': 'middle', ...fit(text, room) }, text)
         ])
-      ])
+      return [
+        // paper
+        h('svg', { class: 'sc-paper', viewBox: '0 0 200 200', 'aria-hidden': 'true', focusable: 'false' }, [
+          h('path', { d: SCALLOP, style: { fill: 'var(--wb-surface)' } })
+        ]),
+        // centre art: the trip photo, otherwise the still mascot on its tint
+        h('span', { class: 'sc-art' }, [
+          hasPhoto(t)
+            ? h('img', { src: t.photo_url, alt: '', width: 300, height: 300, decoding: 'async', draggable: 'false', onError: () => { failed[photoKey(t)] = true } })
+            : h('svg', { viewBox: '0 4 100 100', 'aria-hidden': 'true', focusable: 'false' }, mascotArt(color, tint))
+        ]),
+        // the inset highlight rings (gloss)
+        h('svg', { class: 'sc-gloss', viewBox: '0 0 200 200', 'aria-hidden': 'true', focusable: 'false' }, [
+          h('circle', { cx: 100, cy: 100, r: 90, style: { fill: 'none', stroke: 'var(--wb-surface)', strokeWidth: 1.4, opacity: 0.7 } }),
+          h('circle', { cx: 100, cy: 100, r: 64, style: { fill: 'none', stroke: 'var(--wb-surface)', strokeWidth: 1.2, opacity: 0.5 } })
+        ]),
+        // the ink overprint: rings, the two rim lines and the side dots
+        h('svg', { class: 'sc-ink', viewBox: '0 0 200 200', 'aria-hidden': 'true', focusable: 'false' }, [
+          h('defs', [
+            h('path', { id: `${id}-top`, d: TOP_PATH }),
+            h('path', { id: `${id}-bottom`, d: BOTTOM_PATH })
+          ]),
+          h('g', { style: ink }, [
+            h('circle', { cx: 100, cy: 100, r: 86, 'stroke-width': 4.5 }),
+            h('circle', { cx: 100, cy: 100, r: 80, 'stroke-width': 1.4 }),
+            h('circle', { cx: 100, cy: 100, r: 65.5, 'stroke-width': 2.4, 'stroke-dasharray': '2 4' })
+          ]),
+          ...[15, 165].map((deg) => {
+            const [cx, cy] = polar(73.5, deg).split(' ')
+            return h('circle', { cx, cy, r: 2.2, style: { fill: 'currentColor' } })
+          }),
+          rimText('top', top, TOP_ROOM),
+          rimText('bottom', bottom, BOTTOM_ROOM)
+        ])
+      ]
     }
   }
 }
@@ -242,134 +629,113 @@ const InkStamp = {
 
 <template>
   <section
+    ref="rootEl"
     class="stamp-carousel"
-    :class="{ 'is-reduced': reducedMotion }"
+    :class="{ 'is-reduced': reducedMotion, 'can-track': canTrack }"
     aria-roledescription="carousel"
     :aria-label="label"
     @keydown="onKey"
   >
-    <!-- The disc line: click a disc, swipe, or focus it and use the arrow keys -->
-    <div
-      ref="rail"
-      class="sc-rail"
-      tabindex="0"
-      role="group"
-      :aria-label="`Trip stamps. Use the Left and Right arrow keys to move between ${n} trips.`"
-      @pointerdown="onPointerDown"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
-    >
-      <TransitionGroup tag="div" class="sc-stage" name="disc" :css="!reducedMotion" :duration="420">
-        <button
-          v-for="(trip, i) in items"
-          :key="trip.id"
-          type="button"
-          class="sc-disc"
-          tabindex="-1"
-          :aria-label="`Show trip ${i + 1} of ${n}: ${stopName(trip)}`"
-          :aria-current="i === index ? 'true' : undefined"
-          :data-active="i === index ? '' : undefined"
-          :style="{
-            transform: poses[i].transform,
-            zIndex: poses[i].zIndex,
-            opacity: poses[i].opacity,
-            visibility: poses[i].hidden ? 'hidden' : undefined,
-            '--sc-roll': poses[i].roll,
-            '--sc-deal': dealDelay(i)
-          }"
-          @click="onDiscClick(i)"
+    <div ref="track" class="sc-track" :class="{ 'is-scroll-morph': scrollMorphOn }">
+      <div
+        ref="stage"
+        class="sc-stage"
+        :class="[`is-${phase}`, { 'is-springing': springing, 'has-details': showDetails }]"
+      >
+        <!-- The stamps: click one, swipe, or focus here and use the arrow keys -->
+        <div
+          ref="scene"
+          class="sc-scene"
+          tabindex="0"
+          role="group"
+          :aria-label="`Trip stamps. Use the Left and Right arrow keys to move between ${n} trips.`"
+          :style="{ '--sc-s': `${s}px` }"
+          @pointerdown="onPointerDown"
+          @pointerup="onPointerUp"
+          @pointercancel="onPointerUp"
+          @pointermove="onPointerMove"
+          @pointerleave="onPointerLeave"
         >
-          <span class="sc-disc-deal">
-            <span class="sc-disc-paper">
-              <span class="sc-disc-roll">
-                <span class="sc-disc-spin" :class="{ 'is-spinning': i === index && spinning }">
-                  <InkStamp :trip="trip" :rough="false" />
+          <TransitionGroup tag="div" class="sc-discs" name="disc" :css="!reducedMotion" :duration="420">
+            <button
+              v-for="(trip, i) in items"
+              :key="trip.id"
+              type="button"
+              class="sc-disc"
+              tabindex="-1"
+              :aria-label="`Show trip ${i + 1} of ${n}: ${stopName(trip)}`"
+              :aria-current="i === index ? 'true' : undefined"
+              :data-active="i === index ? '' : undefined"
+              :style="{
+                transform: poses[i].transform,
+                zIndex: poses[i].zIndex,
+                opacity: poses[i].opacity,
+                visibility: poses[i].hidden ? 'hidden' : undefined,
+                '--sc-roll': poses[i].roll,
+                '--sc-glint': poses[i].glint,
+                '--sc-deal': dealDelay(i)
+              }"
+              @click="onDiscClick(i)"
+            >
+              <span class="sc-deal">
+                <span class="sc-tilt">
+                  <span class="sc-shade"><Scallop /></span>
+                  <span class="sc-edge"><Scallop /></span>
+                  <span class="sc-face">
+                    <span class="sc-roll"><StampFace :trip="trip" /></span>
+                    <span class="sc-sheen"></span>
+                  </span>
                 </span>
               </span>
-            </span>
-          </span>
-        </button>
-      </TransitionGroup>
-    </div>
+            </button>
+          </TransitionGroup>
 
-    <!-- Controls -->
-    <div class="sc-controls">
-      <button type="button" class="btn-wb-secondary sc-icon-btn" aria-label="Previous trip" :disabled="index <= 0" @click="prev">
-        <i class="bi bi-arrow-left" aria-hidden="true"></i>
-      </button>
-      <span class="sc-count num" aria-hidden="true"><b>{{ index + 1 }}</b> / {{ n }}</span>
-      <button type="button" class="btn-wb-secondary sc-icon-btn" aria-label="Next trip" :disabled="index >= n - 1" @click="next">
-        <i class="bi bi-arrow-right" aria-hidden="true"></i>
-      </button>
-      <button
-        v-if="!reducedMotion"
-        type="button"
-        class="btn-wb-ghost sc-icon-btn sc-pause"
-        :aria-label="paused ? 'Spin the stamp' : 'Pause the stamp spin'"
-        :aria-pressed="paused ? 'true' : 'false'"
-        @click="paused = !paused"
-      >
-        <i :class="['bi', paused ? 'bi-play-fill' : 'bi-pause-fill']" aria-hidden="true"></i>
-      </button>
-    </div>
+          <!-- Controls -->
+          <div class="sc-controls">
+            <button
+              v-if="canScatter"
+              type="button"
+              class="btn-wb-secondary btn-sm sc-phase"
+              @click="toggleLined"
+            >
+              <i :class="['bi', lined ? 'bi-grid-3x3-gap' : 'bi-distribute-horizontal']" aria-hidden="true"></i>
+              {{ lined ? 'Scatter them' : 'Line them up' }}
+            </button>
+            <button type="button" class="btn-wb-secondary sc-icon-btn" aria-label="Previous trip" :disabled="index <= 0" @click="prev">
+              <i class="bi bi-arrow-left" aria-hidden="true"></i>
+            </button>
+            <span class="sc-count num" aria-hidden="true"><b>{{ pad2(index + 1) }}</b> / {{ pad2(n) }}</span>
+            <button type="button" class="btn-wb-secondary sc-icon-btn" aria-label="Next trip" :disabled="index >= n - 1" @click="next">
+              <i class="bi bi-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
 
-    <p class="visually-hidden" aria-live="polite" aria-atomic="true">
-      <template v-if="active">Trip {{ index + 1 }} of {{ n }}: {{ stopName(active) }}<template v-if="formatDate(active)">, {{ formatDate(active) }}</template></template>
-    </p>
-
-    <!-- The chosen trip's memory card (the slide) -->
-    <Transition :name="cardTransition" mode="out-in" :css="!reducedMotion" appear
-      appear-from-class="sc-deal-from"
-      appear-active-class="sc-deal-active"
-      appear-to-class="sc-deal-to"
-      @after-leave="onCardAfterLeave"
-      @after-enter="cardTransition = 'sc-next'">
-      <article
-        v-if="active"
-        :key="active.id"
-        class="sc-card"
-        role="group"
-        aria-roledescription="slide"
-        :aria-label="`${index + 1} of ${n}: ${stopName(active)}`"
-      >
-        <div class="sc-card-grid">
-          <figure class="sc-photo" :class="{ 'sc-photo--empty': !hasPhoto(active) }">
-            <img
-              v-if="hasPhoto(active)"
-              :src="active.photo_url"
-              :alt="`Your photo from ${active.end_stop || 'this trip'}`"
-              width="600"
-              height="800"
-              decoding="async"
-              @error="failed[photoKey(active)] = true"
-            />
-            <figcaption v-else class="sc-photo-note">No photo yet. Add one with Edit.</figcaption>
-            <span class="sc-stamp" aria-hidden="true"><InkStamp :trip="active" /></span>
-          </figure>
-
-          <div class="sc-body">
-            <header class="sc-title-row">
+        <!-- The chosen trip's details (the slide) -->
+        <Transition :name="cardTransition" mode="out-in" :css="!reducedMotion" @after-leave="onCardAfterLeave" @after-enter="cardTransition = 'sc-next'">
+          <article
+            v-if="showDetails"
+            :key="active.id"
+            class="sc-details"
+            role="group"
+            aria-roledescription="slide"
+            :aria-label="`${index + 1} of ${n}: ${stopName(active)}`"
+          >
+            <header class="sc-details-head">
               <h2 class="sc-title">{{ stopName(active) }}</h2>
-              <time v-if="active.entry_time" class="sc-date num" :datetime="active.entry_time">{{ formatDate(active) }}</time>
+              <button type="button" class="btn-wb-ghost sc-icon-btn sc-close" aria-label="Close trip details" @click="closeDetails">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+              </button>
             </header>
-            <p v-if="active.starting_location || active.entry_time" class="sc-from">
-              <template v-if="active.starting_location">From {{ active.starting_location }}</template>
-              <template v-if="active.starting_location && active.entry_time"> · </template>
-              <template v-if="active.entry_time">set off at <span class="num">{{ formatTime(active) }}</span></template>
-            </p>
 
-            <SpinTicket
-              compact
-              :bus="isBus(active) ? String(active.bus_taken) : ''"
-              :board-at="active.starting_stop || 'Your bus stop'"
-              :get-off-at="stopName(active)"
-              area=""
-              :stops="null"
-              :travel-time="active.time_taken ?? null"
-            />
+            <dl v-if="facts.length" class="sc-facts">
+              <div v-for="f in facts" :key="f.label" class="sc-fact">
+                <dt>{{ f.label }}</dt>
+                <dd :class="{ num: f.num }">{{ f.value }}</dd>
+              </div>
+            </dl>
 
             <div v-if="active.entry_notes" class="sc-note-wrap">
-              <p class="sc-note-label">Your notes</p>
               <p
                 :id="`${uid}-note`"
                 ref="noteEl"
@@ -390,50 +756,75 @@ const InkStamp = {
 
             <slot name="editor" :item="active" :index="index" />
             <slot name="actions" :item="active" :index="index" />
-          </div>
-        </div>
-      </article>
-    </Transition>
+          </article>
+        </Transition>
+      </div>
+    </div>
+
+    <p class="visually-hidden" aria-live="polite" aria-atomic="true">
+      <template v-if="phase === 'scatter'">{{ n }} trip stamps on the wall.</template>
+      <template v-else-if="active">Trip {{ index + 1 }} of {{ n }}: {{ stopName(active) }}<template v-if="formatDate(active)">, {{ formatDate(active) }}</template></template>
+    </p>
   </section>
 </template>
 
 <style scoped>
 .stamp-carousel {
-  --sc-s: clamp(128px, 36vw, 196px);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
+  --sc-h: clamp(420px, calc(100dvh - var(--header-h) - var(--sp-4)), 1000px);
+  container-type: inline-size;
   min-width: 0;
 }
 
-/* ── Disc line ── */
-.sc-rail {
+/* ── The pinned stage and its scroll track ── */
+.sc-track {
   position: relative;
-  height: calc(var(--sc-s) * 1.6);
+}
+.sc-track.is-scroll-morph {
+  height: calc(var(--sc-h) + 90dvh);
+}
+.sc-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, clamp(280px, 36%, 420px)) minmax(0, 1fr);
+  align-items: start;
+  min-height: var(--sc-h);
   overflow: hidden;
   border-radius: var(--r-card);
   background: var(--wb-surface-2);
+}
+.is-scroll-morph > .sc-stage {
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-2));
+}
+
+.sc-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  perspective: calc(var(--sc-s) * 3.2);
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-.sc-rail:focus-visible {
+.sc-scene:focus-visible {
   outline: 3px solid var(--wb-green);
-  outline-offset: 3px;
+  outline-offset: -6px;
+  border-radius: var(--r-card);
 }
-.sc-stage {
-  position: absolute;
-  left: 50%;
-  top: 54%;
-  width: var(--sc-s);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  perspective: calc(var(--sc-s) * 3.2);
-}
-.sc-disc {
+.sc-discs {
   position: absolute;
   inset: 0;
+  transform-style: preserve-3d;
+}
+
+/* ── One stamp ── */
+.sc-disc {
+  position: absolute;
+  left: calc(50% - var(--sc-s) / 2);
+  top: calc(50% - var(--sc-s) / 2);
+  width: var(--sc-s);
+  height: var(--sc-s);
   margin: 0;
   padding: 0;
   border: 0;
@@ -445,68 +836,149 @@ const InkStamp = {
   transition: transform var(--t-reveal) var(--ease), opacity var(--t-ui) var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
-.sc-disc[data-active] {
+.is-springing .sc-disc {
+  transition: none;
+}
+.is-zoom .sc-disc[data-active] {
   cursor: default;
 }
-.sc-disc-deal,
-.sc-disc-paper,
-.sc-disc-roll,
-.sc-disc-spin {
+.sc-deal,
+.sc-tilt,
+.sc-shade,
+.sc-edge,
+.sc-face,
+.sc-roll,
+.sc-sheen {
   position: absolute;
   inset: 0;
   border-radius: 50%;
 }
-.sc-disc-deal {
+.sc-deal,
+.sc-tilt {
+  transform-style: preserve-3d;
+}
+.sc-deal {
   animation: sc-deal var(--t-reveal) var(--ease) var(--sc-deal, 0ms) both;
 }
-.sc-disc-paper {
-  overflow: hidden;
-  border: 2px solid var(--wb-ink);
-  background: var(--wb-surface);
+
+/* the chosen stamp leans toward the pointer (fine pointers only) */
+.sc-tilt {
+  transition: transform 500ms var(--ease);
 }
-.sc-disc[data-active] .sc-disc-paper {
-  border-width: 3px;
+.can-track .sc-stage:not(.is-scatter) .sc-disc[data-active] .sc-tilt {
+  transform: rotateX(calc(var(--sc-py, 0) * -12deg)) rotateY(calc(var(--sc-px, 0) * 12deg));
 }
-.sc-disc-roll {
+
+/* soft ground shade and the back-set edge rim */
+.sc-shade {
+  color: var(--wb-ink);
+  opacity: .2;
+  filter: blur(calc(var(--sc-s) * .035));
+  transform: translate3d(0, 7%, -18px) scale(.96);
+  pointer-events: none;
+}
+.sc-edge {
+  color: color-mix(in srgb, var(--wb-ink) 82%, var(--wb-green));
+  transform: translate3d(0, 2.5%, -4px);
+}
+.sc-shade :deep(svg),
+.sc-edge :deep(svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sc-roll {
   transform: rotate(var(--sc-roll, 0deg));
   transition: transform var(--t-reveal) var(--ease);
 }
-.sc-disc-spin {
-  padding: 8%;
+.is-springing .sc-roll {
+  transition: none;
 }
-.sc-disc-spin.is-spinning {
-  animation: sc-spin 24s linear infinite;
-}
-.sc-disc .ink-stamp {
+.sc-roll :deep(svg) {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
-  opacity: .85;
+}
+.sc-roll :deep(.sc-art) {
+  position: absolute;
+  inset: 18%;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--wb-surface-2);
+}
+.sc-roll :deep(.sc-art img),
+.sc-roll :deep(.sc-art svg) {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+}
+.sc-roll :deep(.sc-ink) {
+  color: var(--wb-green);
+  opacity: .9;
   mix-blend-mode: multiply;
+}
+
+/* the conic glint, driven by the pointer and the stamp's yaw */
+.sc-sheen {
+  inset: 3%;
+  opacity: .55;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  background: conic-gradient(from calc(var(--sc-glint, 0deg) + var(--sc-px, 0) * 70deg), /* taste-skill-ignore: glossy stamp finish the boss asked for, a material sheen */
+    transparent 0deg,
+    color-mix(in srgb, var(--wb-surface) 55%, transparent) 16deg,
+    transparent 38deg,
+    transparent 140deg,
+    color-mix(in srgb, var(--wb-green-tint) 50%, transparent) 168deg,
+    color-mix(in srgb, var(--cat-art-tint) 45%, transparent) 186deg,
+    color-mix(in srgb, var(--wb-amber-tint) 40%, transparent) 200deg,
+    transparent 224deg,
+    transparent 360deg);
+}
+
+/* Stamp type, set inside the SVG */
+.stamp-carousel :deep(.ink-rim) {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  letter-spacing: .12em;
 }
 
 @keyframes sc-deal {
   from { opacity: 0; transform: translateY(40px) rotate(-4deg); }
   to   { opacity: 1; transform: none; }
 }
-@keyframes sc-spin {
-  to { transform: rotate(360deg); }
-}
 @keyframes sc-fall {
   from { opacity: 1; transform: none; }
   to   { opacity: 0; transform: translateY(40px) rotate(6deg) scale(.9); }
 }
 
-/* a deleted trip's disc falls out of the line; the others close the gap */
-.disc-leave-active .sc-disc-deal {
+/* a deleted trip's stamp falls out of the line; the others close the gap */
+.disc-leave-active .sc-deal {
   animation: sc-fall var(--t-reveal) var(--ease) both;
 }
 
-/* ── Controls ── */
+/* ── Controls, bottom right ── */
 .sc-controls {
+  position: absolute;
+  right: var(--sp-4);
+  bottom: var(--sp-4);
+  z-index: 300;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: var(--sp-3);
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  max-width: calc(100% - var(--sp-4) * 2);
+  padding: var(--sp-1);
+  border-radius: var(--r-pill);
+  background: var(--wb-surface);
 }
 .sc-icon-btn {
   width: 44px;
@@ -524,106 +996,63 @@ const InkStamp = {
   color: var(--wb-ink);
   font-weight: 600;
 }
-.sc-pause {
-  margin-left: var(--sp-2);
-}
 
-/* ── Memory card ── */
-.sc-card {
-  container-type: inline-size;
-  border-radius: var(--r-card);
-  background: var(--wb-surface);
-}
-.sc-card-grid {
-  display: grid;
-  gap: var(--sp-5);
-  padding: var(--sp-4);
-}
-@container (min-width: 600px) {
-  .sc-card-grid {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    align-items: start;
-    padding: var(--sp-5);
-  }
-}
-
-.sc-photo {
+/* ── Details, top left ── */
+.sc-details {
   position: relative;
-  margin: 0;
-  aspect-ratio: 4 / 5;
-  background: var(--wb-surface-2);
-}
-@media (min-width: 768px) {
-  .sc-photo { aspect-ratio: 3 / 4; }
-}
-.sc-photo img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.sc-photo--empty {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: var(--sp-4);
-}
-.sc-photo-note {
-  color: var(--wb-text-2);
-  font-size: var(--fs-small);
-  text-align: center;
-}
-.sc-stamp {
-  position: absolute;
-  right: calc(var(--sp-3) * -1);
-  bottom: calc(var(--sp-4) * -1);
-  width: 104px;
-  height: 104px;
-  color: var(--wb-green);
-  opacity: .85;
-  mix-blend-mode: multiply;
-  transform: rotate(-8deg);
-  pointer-events: none;
-}
-.sc-photo--empty .sc-stamp {
-  inset: 14% 14% auto;
-  width: auto;
-  height: auto;
-  aspect-ratio: 1;
-}
-.sc-stamp .ink-stamp {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.sc-body {
+  z-index: 2;
+  grid-column: 1;
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
   min-width: 0;
+  margin: var(--sp-4);
+  padding: var(--sp-5);
+  border-radius: var(--r-card);
+  background: var(--wb-surface);
 }
-.sc-title-row {
+.sc-details-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: var(--sp-1) var(--sp-3);
+  gap: var(--sp-2);
 }
 .sc-title {
   margin: 0;
-  font-size: var(--fs-lead);
-  line-height: 1.2;
+  font-size: clamp(1.75rem, 1.1rem + 2.4cqi, 2.75rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
-.sc-date {
-  color: var(--wb-muted);
-  font-size: var(--fs-small);
+.sc-close {
+  flex: none;
+  margin: calc(var(--sp-2) * -1) calc(var(--sp-2) * -1) 0 0;
 }
-.sc-from {
-  margin: calc(var(--sp-3) * -1) 0 0;
+
+.sc-facts {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-control);
+  background: var(--wb-surface-2);
+}
+.sc-fact {
+  display: grid;
+  grid-template-columns: minmax(84px, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+.sc-fact dt {
   color: var(--wb-text-2);
   font-size: var(--fs-small);
+  font-weight: 400;
+}
+.sc-fact dd {
+  margin: 0;
+  color: var(--wb-ink);
+  font-weight: 500;
+  text-align: right;
   overflow-wrap: anywhere;
 }
 
@@ -633,24 +1062,16 @@ const InkStamp = {
   align-items: flex-start;
   gap: var(--sp-1);
 }
-.sc-note-label {
-  margin: 0;
-  color: var(--wb-text-2);
-  font-size: var(--fs-small);
-}
 .sc-note {
   display: -webkit-box;
   align-self: stretch;
   margin: 0;
-  padding: var(--sp-3) var(--sp-4);
   overflow: hidden;
-  border-radius: var(--r-control);
-  background: var(--wb-surface-2);
   color: var(--wb-ink);
-  font-family: var(--font-hand);
-  font-size: 1.375rem;
-  font-weight: 500;
-  line-height: 1.25;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
   white-space: pre-line;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
@@ -666,53 +1087,60 @@ const InkStamp = {
   margin-left: calc(var(--sp-3) * -1);
 }
 
-/* Stamp type, set inside the SVG */
-.stamp-carousel :deep(.ink-rim),
-.stamp-carousel :deep(.ink-head),
-.stamp-carousel :deep(.ink-year) {
-  font-family: var(--font-ui);
-  font-weight: 600;
-  letter-spacing: .12em;
-}
-.stamp-carousel :deep(.ink-day) {
-  font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: .02em;
+/* ── Phones: the details sit below the zoomed stamp, in the stage's flow ── */
+@container (max-width: 639px) {
+  .sc-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sc-scene {
+    position: relative;
+    inset: auto;
+    flex: 1 0 auto;
+    min-height: var(--sc-h);
+  }
+  .has-details .sc-scene {
+    flex: none;
+    min-height: 0;
+    height: clamp(300px, 56dvh, 480px);
+  }
+  .sc-controls {
+    right: var(--sp-3);
+    bottom: var(--sp-3);
+    max-width: calc(100% - var(--sp-3) * 2);
+  }
+  .sc-details {
+    margin: 0 var(--sp-3) var(--sp-3);
+    padding: var(--sp-4);
+  }
 }
 
-/* ── Card changes: slide along, or fall away after a delete ── */
+/* ── Details changes: slide along, or fall away after a delete ── */
 .sc-next-enter-active, .sc-prev-enter-active, .sc-fall-enter-active {
   transition: opacity var(--t-ui) var(--ease), transform var(--t-reveal) var(--ease);
 }
 .sc-next-leave-active, .sc-prev-leave-active {
   transition: opacity var(--t-micro) var(--ease), transform var(--t-micro) var(--ease);
 }
-.sc-next-enter-from { opacity: 0; transform: translateX(32px); }
-.sc-next-leave-to   { opacity: 0; transform: translateX(-24px); }
-.sc-prev-enter-from { opacity: 0; transform: translateX(-32px); }
-.sc-prev-leave-to   { opacity: 0; transform: translateX(24px); }
-
+.sc-next-enter-from { opacity: 0; transform: translateX(-24px); }
+.sc-next-leave-to   { opacity: 0; transform: translateX(-16px); }
+.sc-prev-enter-from { opacity: 0; transform: translateX(-24px); }
+.sc-prev-leave-to   { opacity: 0; transform: translateX(16px); }
 .sc-fall-leave-active { animation: sc-fall var(--t-reveal) var(--ease) both; }
-.sc-fall-enter-from,
-.sc-deal-from { opacity: 0; transform: translateY(40px) rotate(-4deg); }
-.sc-deal-active {
-  transition: opacity var(--t-reveal) var(--ease) 280ms, transform var(--t-reveal) var(--ease) 280ms;
-}
+.sc-fall-enter-from { opacity: 0; transform: translateY(40px) rotate(-4deg); }
 
-/* ── Reduced motion: everything lands at once ── */
+/* ── Reduced motion: no deal-in, roll or lean; every change lands at once ── */
 .is-reduced .sc-disc,
-.is-reduced .sc-disc-roll {
+.is-reduced .sc-roll,
+.is-reduced .sc-tilt {
   transition: none;
 }
-.is-reduced .sc-disc-deal,
-.is-reduced .sc-disc-spin {
+.is-reduced .sc-deal {
   animation: none;
 }
-.is-reduced .sc-disc-roll {
-  transform: none;
-}
 @media (prefers-reduced-motion: reduce) {
-  .sc-disc, .sc-disc-roll { transition: none; }
-  .sc-disc-deal, .sc-disc-spin.is-spinning { animation: none; }
+  .sc-disc, .sc-roll, .sc-tilt { transition: none; }
+  .sc-deal { animation: none; }
 }
 </style>

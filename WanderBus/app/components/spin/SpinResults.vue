@@ -2,11 +2,11 @@
   Spin results: the LED board and one stage that walks through the F1 states (design.md §3.3, §4.3).
     idle       parked bus, the mascot waiting at the stop (eyes follow the pointer)
     searching  the bus idles in place while live arrivals load
-    bays       up to three buses pull into bays A/B/C (BusBays); pick one to board
-    ticket     the picked bus's face-down ticket slides up (420 ms), then the tear runs
+    bays       up to three face-down tickets A/B/C ride a belt (TicketBelt); pick one and it flies here
+    ticket     the picked ticket slides up into the slot (420 ms), then the tear runs; confetti on the tear
     torn       a boarding pass: from → to, the legs, what's within 1 km, the total and the actions
     no result  the bus breaks down, with a Retry button that runs the same search again
-  Nothing about the destination stop shows before the tear (bays show only the bus, road and time).
+  Nothing about the trip shows before the tear: the belt only gets each ticket's letter and minutes.
   Boarding-pass layout loosely after 21st "Ticket Confirmation Card" (id 6492), as a layout
   reference only; no code was downloaded or ported.
 -->
@@ -15,11 +15,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LedBoard from '~/components/ui/LedBoard.vue';
 import SpinTicket from '~/components/ui/SpinTicket.vue';
 import SpinSubmit from '~/components/spin/SpinSubmit.vue';
-import BusBays from '~/components/spin/BusBays.vue';
+import TicketBelt, { bandFor } from '~/components/spin/TicketBelt.vue';
+import ConfettiBurst from '~/components/ui/ConfettiBurst.vue';
 import BusDriveBy from '~/components/ui/BusDriveBy.vue';
 import WanderMascot from '~/components/ui/WanderMascot.vue';
 import { useMotionPrefs } from '~/composables/usePointer';
 import { categoryInfo } from '~/utils/spinCategories';
+import { cheerCrew } from '~/utils/crewCheer';
 
 const props = defineProps({
     submitted: Boolean,
@@ -27,9 +29,13 @@ const props = defineProps({
     saved: Boolean,
     errorMessage: String,
     chosenStop: [Object, String],
-    /** Up to 3 different { destination, chosen } picks, one per bay. */
-    ticketOptions: { type: Array, default: () => [] },
-    /** /api/allBusStops, to name the road under each bay. */
+    /**
+     * Up to 3 different { destination, chosen } picks, one per ticket on the belt. Passing it at all
+     * (the home page) turns on the belt: "Spin again" then emits `retry` to run the search again.
+     * Left out (the lobby), "Spin again" emits `reroll`.
+     */
+    ticketOptions: { type: Array, default: undefined },
+    /** /api/allBusStops (no longer read here: the belt shows no stop or road before the pick). */
     busStops: { type: Array, default: () => [] },
     stopDetails: [Object, String],
     startDetails: [Object, String],
@@ -60,30 +66,43 @@ onMounted(() => {
     desktopQuery.addEventListener('change', onBreakpoint)
 })
 
-const searching = computed(() => props.submitted && !props.errorMessage && !props.chosenStop && !props.ticketOptions.length)
-const picking = computed(() => props.submitted && !props.errorMessage && !props.chosenStop && props.ticketOptions.length > 0)
+const usesBelt = computed(() => props.ticketOptions !== undefined)
+const options = computed(() => props.ticketOptions ?? [])
+const searching = computed(() => props.submitted && !props.errorMessage && !props.chosenStop && !options.value.length)
+const picking = computed(() => props.submitted && !props.errorMessage && !props.chosenStop && options.value.length > 0)
 
+// Only the letter and the time reach the belt, so nothing on it can give the trip away.
 const BAY_LETTERS = ['A', 'B', 'C']
-const bays = computed(() => props.ticketOptions.map((option, i) => {
-    const stop = props.busStops.find((s) => s.BusStopCode === option.destination)
-    return {
-        letter: BAY_LETTERS[i],
-        bus: option.chosen.bus,
-        area: stop?.RoadName ?? '',
-        minutes: Math.ceil(option.chosen.totalTime)
-    }
-}))
+const bays = computed(() => options.value.map((option, i) => ({
+    letter: BAY_LETTERS[i],
+    minutes: Math.ceil(option.chosen.totalTime)
+})))
 const baysNote = computed(() => {
     const n = bays.value.length
-    if (n === 1) return 'One bus fits your time. Pick it to get your ticket.'
-    return `${n === 2 ? 'Two' : 'Three'} buses pulled in. Pick one to get its ticket.`
+    if (n === 1) return 'One ticket fits your time. Pick it to take it.'
+    return `${n === 2 ? 'Two' : 'Three'} mystery tickets are riding the belt. Pick one to take it.`
 })
 
-// Picking a bay: the ticket slides up, then focus lands on the stub so the tear can start.
+// Where the picked ticket lands: roughly where SpinTicket appears (centred under the hint line).
+const bodyEl = ref(null)
+function ticketLanding() {
+    const body = bodyEl.value
+    if (!body) return null
+    const box = body.getBoundingClientRect()
+    const css = getComputedStyle(body)
+    const left = box.left + parseFloat(css.paddingLeft)
+    const inner = box.width - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight)
+    const width = isDesktop.value ? Math.min(272, Math.max(220, inner)) : Math.min(580, Math.max(280, inner))
+    const height = isDesktop.value ? 392 : width < 400 ? 210 : 230
+    const top = box.top + parseFloat(css.paddingTop) + 44
+    return new DOMRect(left + (inner - width) / 2, top, width, height)
+}
+
+// Picking a ticket: it flies off the belt, slides up, then focus lands on the stub so the tear can start.
 const revealEl = ref(null)
 let focusTimer = null
 function onChoose(index) {
-    emit('choose', props.ticketOptions[index])
+    emit('choose', options.value[index])
     clearTimeout(focusTimer)
     focusTimer = setTimeout(() => {
         revealEl.value?.querySelector('[data-testid="tear-stub"]')?.focus()
@@ -94,10 +113,37 @@ onBeforeUnmount(() => {
     clearTimeout(focusTimer)
 })
 
+// Confetti once per ticket, from where the stub tore off (the stub's own box has fallen by now,
+// so take the ticket's untransformed stage and its stub end).
+const confetti = ref(null)
+let confettiFor = -1
+function onTear() {
+    torn.value = true
+    cheerCrew()
+    if (confettiFor === ticketKey.value) return
+    confettiFor = ticketKey.value
+    const stage = revealEl.value?.querySelector('.tear-ticket__stage')
+    if (!stage) return
+    const box = stage.getBoundingClientRect()
+    const origin = isDesktop.value
+        ? { x: box.left + box.width / 2, y: box.bottom - 48 }
+        : { x: box.right - (box.width < 400 ? 46 : 65), y: box.top + box.height / 2 }
+    confetti.value?.fire(origin)
+}
+
 const trip = computed(() => props.chosenStop?.chosen ?? null)
 const walkMin = computed(() => (trip.value ? Math.ceil(props.startingStops[trip.value.boardAt]) : 0))
 const walkM = computed(() => (trip.value ? Math.round(props.startingStops[trip.value.boardAt] / 12 * 1000) : 0))
 const totalMin = computed(() => (trip.value ? Math.ceil(trip.value.totalTime) : 0))
+// The same minutes and the same rule as the belt, so the ticket keeps the colour it rode in on.
+// The lobby has no belt and keeps the default green.
+const band = computed(() => (usesBelt.value && trip.value ? bandFor(totalMin.value) : 'short'))
+
+// Home: back to the search and a fresh belt. Lobby: the crew's own reroll.
+function spinAgain() {
+    if (usesBelt.value) emit('retry')
+    else emit('reroll')
+}
 const walkingLink = computed(() => {
     const stop = props.startDetails
     return stop ? `https://www.google.com/maps/dir/?api=1&destination=${stop.Latitude},${stop.Longitude}&travelmode=walking` : ''
@@ -119,7 +165,7 @@ const board = computed(() => {
     if (!props.submitted) return { badge: '??', messages: [['READY WHEN', 'YOU ARE'], ['SOMEWHERE NEW', 'ANY BUS, ANY STOP']] }
     if (props.errorMessage) return { badge: '??', messages: [['NO BUS', 'FITS']] }
     if (searching.value) return { badge: '??', messages: [['FINDING YOUR', 'STOP']] }
-    if (picking.value) return { badge: '??', messages: [['PICK YOUR', 'BUS']] }
+    if (picking.value) return { badge: '??', messages: [['PICK YOUR', 'TICKET']] }
     if (!torn.value) return { badge: '??', messages: [['YOUR TICKET', 'IS READY'], ['TEAR THE STUB', 'TO SEE WHERE']] }
     const destination = props.stopDetails.Description.toUpperCase()
     const road = props.stopDetails.RoadName.toUpperCase()
@@ -133,7 +179,7 @@ const announcement = computed(() => {
     if (!props.submitted) return ''
     if (props.errorMessage) return `No bus fits. ${props.errorMessage}`
     if (searching.value) return 'Checking live arrivals…'
-    if (picking.value) return `${baysNote.value} Use the arrow keys to move between bays.`
+    if (picking.value) return `${baysNote.value} Use the arrow keys to move between tickets.`
     if (!torn.value) return 'Your ticket is ready. Drag, tap or press Enter to tear the stub.'
     return trip.value.bus
         ? `Here’s your side quest: bus ${trip.value.bus} to ${props.stopDetails.Description}, about ${totalMin.value} min.`
@@ -146,13 +192,13 @@ const announcement = computed(() => {
         <LedBoard :badge="board.badge" :messages="board.messages" class="results-board" />
         <p class="visually-hidden" role="status" aria-live="polite">{{ announcement }}</p>
 
-        <div class="results-body">
+        <div ref="bodyEl" class="results-body">
             <div v-if="!submitted" class="stage">
                 <div class="scene">
                     <BusDriveBy class="scene-bus" mode="parked" label="READY WHEN YOU ARE" />
                     <WanderMascot class="scene-mascot" mood="idle" gaze :size="56" />
                 </div>
-                <p class="results-note">Set your time and tap Spin. Up to three buses pull in; pick one, then tear its stub to find out where you’re going.</p>
+                <p class="results-note">Set your time and tap Spin. Up to three mystery tickets ride the belt; pick one, then tear its stub to find out where you’re going.</p>
             </div>
 
             <div v-else-if="errorMessage" class="stage">
@@ -174,7 +220,7 @@ const announcement = computed(() => {
 
             <div v-else-if="picking" class="stage stage--bays">
                 <p class="results-note">{{ baysNote }}</p>
-                <BusBays :bays="bays" @choose="onChoose" />
+                <TicketBelt :options="bays" label="Pick your ticket" :fly-to="ticketLanding" @choose="onChoose" />
             </div>
 
             <template v-else>
@@ -197,9 +243,10 @@ const announcement = computed(() => {
                             :get-off-at="stopDetails.Description"
                             :area="stopDetails.RoadName"
                             :stops="trip.stops"
+                            :band="band"
                             :orientation="isDesktop ? 'vertical' : 'horizontal'"
                             :resettable="false"
-                            @tear="torn = true"
+                            @tear="onTear"
                         />
                     </div>
 
@@ -281,7 +328,7 @@ const announcement = computed(() => {
                         >
                             Explore this stop
                         </NuxtLink>
-                        <button type="button" class="btn btn-wb-secondary" @click="$emit('reroll')">
+                        <button type="button" class="btn btn-wb-secondary" @click="spinAgain">
                             <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
                             Spin again
                         </button>
@@ -292,6 +339,7 @@ const announcement = computed(() => {
                 </template>
             </template>
         </div>
+        <ConfettiBurst ref="confetti" />
     </section>
 </template>
 

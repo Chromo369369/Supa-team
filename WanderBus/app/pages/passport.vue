@@ -41,119 +41,121 @@
             <NuxtLink to="/home" class="btn-wb-primary">Spin a trip</NuxtLink>
           </div>
 
-          <!-- Memory cards: one stamped disc per trip (§4.5) -->
-          <StampCarousel v-if="savedTrips.length" :items="savedTrips" label="Your trips">
-            <template #editor="{ item: trip }">
-              <transition name="expand">
-                <div v-if="editingId === trip.id" class="expand">
-                  <div class="expand-inner">
-                    <form
-                      :id="`edit-${trip.id}`"
-                      class="edit-well"
-                      @submit.prevent="saveEdit(trip.id)"
-                      @paste="onPaste"
-                    >
-                      <div class="mb-3">
-                        <label :for="`notes-${trip.id}`" class="form-label field-label">Your notes</label>
-                        <textarea
-                          :id="`notes-${trip.id}`"
-                          v-model="draft.entry_notes"
-                          class="form-control notes-input"
-                          rows="3"
-                          placeholder="How was the trip?"
-                        ></textarea>
-                      </div>
-
-                      <!-- Image Upload Picker: a real button opens the hidden file input -->
-                      <div class="mb-3">
-                        <p class="field-label mb-2">Trip photo</p>
-
-                        <input
-                          :ref="setFileInput"
-                          type="file"
-                          :id="`photo-${trip.id}`"
-                          accept="image/*"
-                          class="visually-hidden"
-                          tabindex="-1"
-                          aria-hidden="true"
-                          @change="onFilePicked"
-                        />
-                        <button
-                          type="button"
-                          class="btn-wb-secondary photo-btn"
-                          :disabled="photoBusy"
-                          :aria-busy="photoBusy ? 'true' : 'false'"
-                          :aria-describedby="photoError ? `photo-help-${trip.id} photo-error-${trip.id}` : `photo-help-${trip.id}`"
-                          @click="pickPhoto"
-                        >
-                          <template v-if="photoBusy">Processing photo…</template>
-                          <template v-else>
-                            <i class="bi bi-camera" aria-hidden="true"></i>
-                            {{ draft.photo_url ? 'Replace photo' : 'Add photo' }}
-                          </template>
-                        </button>
-                        <div :id="`photo-help-${trip.id}`" class="form-text field-help">You can also paste a copied image (Ctrl/Cmd + V).</div>
-
-                        <div v-if="photoError" :id="`photo-error-${trip.id}`" class="wb-field-error" role="alert">{{ photoError }}</div>
-
-                        <!-- Preview of the selected photo -->
-                        <div v-if="draft.photo_url" class="photo-preview mt-3">
-                          <img :src="draft.photo_url" :alt="`New photo for ${trip.end_stop || 'this trip'}`" width="640" height="400" />
-                          <button
-                            type="button"
-                            class="photo-remove"
-                            aria-label="Remove photo"
-                            @click="clearPhoto"
-                          ><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-                        </div>
-                      </div>
-
-                      <div class="d-flex flex-wrap gap-2">
-                        <button
-                          type="submit"
-                          class="btn-wb-primary"
-                          :disabled="saving || photoBusy"
-                          :aria-busy="saving ? 'true' : 'false'"
-                        >
-                          {{ saving ? 'Saving…' : 'Save changes' }}
-                        </button>
-                        <button type="button" class="btn-wb-secondary" @click="cancelEdit">
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              </transition>
-            </template>
-
-            <template #actions="{ item: trip }">
-              <div class="trip-actions">
-                <button
-                  type="button"
-                  class="btn-wb-ghost btn-sm"
-                  :aria-expanded="editingId === trip.id ? 'true' : 'false'"
-                  :aria-controls="`edit-${trip.id}`"
-                  @click="toggleEdit(trip)"
-                >
-                  <i :class="['bi', editingId === trip.id ? 'bi-x-lg' : 'bi-pencil']" aria-hidden="true"></i>
-                  {{ editingId === trip.id ? 'Close editor' : 'Edit' }}
-                </button>
-
-                <button
-                  type="button"
-                  class="btn-wb-ghost btn-sm trip-delete"
-                  @click="removeTrip(trip.id)"
-                >
-                  <i class="bi bi-trash3" aria-hidden="true"></i>
-                  Delete trip
-                </button>
-              </div>
-            </template>
-          </StampCarousel>
-
         </div>
       </div>
+    </div>
+
+    <!-- The stamp wall: one glossy stamp per trip, on a full-height stage (§4.5) -->
+    <div v-if="savedTrips.length" class="passport-wall">
+      <StampCarousel :items="savedTrips" label="Your trips">
+        <template #editor="{ item: trip }">
+          <transition name="expand">
+            <div v-if="editingId === trip.id" class="expand">
+              <div class="expand-inner">
+                <form
+                  :id="`edit-${trip.id}`"
+                  class="edit-well"
+                  @submit.prevent="saveEdit(trip.id)"
+                  @paste="onPaste"
+                >
+                  <div class="mb-3">
+                    <label :for="`notes-${trip.id}`" class="form-label field-label">Your notes</label>
+                    <textarea
+                      :id="`notes-${trip.id}`"
+                      v-model="draft.entry_notes"
+                      class="form-control notes-input"
+                      rows="3"
+                      placeholder="How was the trip?"
+                    ></textarea>
+                  </div>
+
+                  <!-- Image Upload Picker: a real button opens the hidden file input -->
+                  <div class="mb-3">
+                    <p class="field-label mb-2">Trip photo</p>
+
+                    <input
+                      :ref="setFileInput"
+                      type="file"
+                      :id="`photo-${trip.id}`"
+                      accept="image/*"
+                      class="visually-hidden"
+                      tabindex="-1"
+                      aria-hidden="true"
+                      @change="onFilePicked"
+                    />
+                    <button
+                      type="button"
+                      class="btn-wb-secondary photo-btn"
+                      :disabled="photoBusy"
+                      :aria-busy="photoBusy ? 'true' : 'false'"
+                      :aria-describedby="photoError ? `photo-help-${trip.id} photo-error-${trip.id}` : `photo-help-${trip.id}`"
+                      @click="pickPhoto"
+                    >
+                      <template v-if="photoBusy">Processing photo…</template>
+                      <template v-else>
+                        <i class="bi bi-camera" aria-hidden="true"></i>
+                        {{ draft.photo_url ? 'Replace photo' : 'Add photo' }}
+                      </template>
+                    </button>
+                    <div :id="`photo-help-${trip.id}`" class="form-text field-help">You can also paste a copied image (Ctrl/Cmd + V).</div>
+
+                    <div v-if="photoError" :id="`photo-error-${trip.id}`" class="wb-field-error" role="alert">{{ photoError }}</div>
+
+                    <!-- Preview of the selected photo -->
+                    <div v-if="draft.photo_url" class="photo-preview mt-3">
+                      <img :src="draft.photo_url" :alt="`New photo for ${trip.end_stop || 'this trip'}`" width="640" height="400" />
+                      <button
+                        type="button"
+                        class="photo-remove"
+                        aria-label="Remove photo"
+                        @click="clearPhoto"
+                      ><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                    </div>
+                  </div>
+
+                  <div class="d-flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      class="btn-wb-primary"
+                      :disabled="saving || photoBusy"
+                      :aria-busy="saving ? 'true' : 'false'"
+                    >
+                      {{ saving ? 'Saving…' : 'Save changes' }}
+                    </button>
+                    <button type="button" class="btn-wb-secondary" @click="cancelEdit">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </transition>
+        </template>
+
+        <template #actions="{ item: trip }">
+          <div class="trip-actions">
+            <button
+              type="button"
+              class="btn-wb-ghost btn-sm"
+              :aria-expanded="editingId === trip.id ? 'true' : 'false'"
+              :aria-controls="`edit-${trip.id}`"
+              @click="toggleEdit(trip)"
+            >
+              <i :class="['bi', editingId === trip.id ? 'bi-x-lg' : 'bi-pencil']" aria-hidden="true"></i>
+              {{ editingId === trip.id ? 'Close editor' : 'Edit' }}
+            </button>
+
+            <button
+              type="button"
+              class="btn-wb-ghost btn-sm trip-delete"
+              @click="removeTrip(trip.id)"
+            >
+              <i class="bi bi-trash3" aria-hidden="true"></i>
+              Delete trip
+            </button>
+          </div>
+        </template>
+      </StampCarousel>
     </div>
   </div>
 </template>
@@ -496,7 +498,11 @@ const clearPhoto = () => {
   max-width: 420px;
 }
 
-/* Trip cards, journey and photo styles moved into StampCarousel.vue (the memory card). */
+/* ── The stamp wall: wider than the header column, so the stage can hold many stamps ── */
+.passport-wall {
+  max-width: 1280px;
+  margin: var(--sp-5) auto 0;
+}
 
 /* ── Expandable editor: grid-rows 0fr → 1fr + opacity (§2.7) ── */
 .expand {
@@ -544,9 +550,9 @@ const clearPhoto = () => {
   outline-offset: 0;
 }
 .notes-input {
-  font-family: var(--font-hand);
-  font-size: 1.375rem;
-  line-height: 1.25;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .photo-btn {
@@ -593,14 +599,12 @@ const clearPhoto = () => {
   outline-offset: 2px;
 }
 
-/* ── Card actions ── */
+/* ── Trip actions, under the details on the stage ── */
 .trip-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--sp-2);
-  margin-top: auto;
   /* pull ghost buttons to the text edge */
   margin-inline: calc(var(--sp-3) * -1);
 }

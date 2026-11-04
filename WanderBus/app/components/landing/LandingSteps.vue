@@ -12,10 +12,18 @@ const steps = [
         <div class="container landing-section">
             <h2 class="section-title steps-heading">How a side quest works</h2>
 
-            <ol class="row gx-4 gy-5 list-unstyled mb-0">
+            <!-- Numbers removed per taste rules; to revert, restore the .step-num circle.
+                 The order stays semantic: a real <ol> (role="list" keeps it a list once the markers are hidden). -->
+            <ol class="row gx-4 gy-5 list-unstyled mb-0" role="list">
                 <li v-for="step in steps" :key="step.num" class="col-md-6 col-lg-3">
                     <div class="step-line" aria-hidden="true">
-                        <span class="step-num num" :class="{ 'step-last': step.num === 4 }">{{ step.num }}</span>
+                        <svg class="step-stop" :class="{ 'step-last': step.num === steps.length }" viewBox="0 0 24 40" width="24" height="40" focusable="false" aria-hidden="true">
+                            <rect class="step-pole" x="10.5" y="12" width="3" height="28" />
+                            <rect class="step-sign" x="2" y="0" width="20" height="15" rx="4" />
+                            <rect class="step-glyph" x="6" y="4" width="12" height="6" rx="1.5" />
+                            <circle class="step-glyph" cx="8.5" cy="11.5" r="1.5" />
+                            <circle class="step-glyph" cx="15.5" cy="11.5" r="1.5" />
+                        </svg>
                     </div>
                     <h3 class="step-title">{{ step.title }}</h3>
                     <p class="step-text mb-0">{{ step.text }}</p>
@@ -45,31 +53,26 @@ const steps = [
 .step-line {
   display: flex;
   align-items: center;
-  height: 24px;
+  height: 44px;
   border-bottom: 3px solid var(--wb-ink);
 }
 
-.step-num {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: -24px;
-  border-radius: 50%;
-  background: var(--wb-surface);
-  border: 3px solid var(--wb-ink);
-  color: var(--wb-ink);
-  font-family: var(--font-display);
-  font-weight: 600;
+/* A bus-stop sign on a pole, standing on the route line (the last stop is amber) */
+.step-stop {
+  display: block;
+  flex: none;
+  align-self: flex-end;
+  margin-bottom: -3px; /* the pole meets the road line */
 }
 
-.step-last {
-  background: var(--wb-amber);
-}
+.step-pole { fill: var(--wb-ink); }
+.step-sign { fill: var(--wb-green); }
+.step-glyph { fill: var(--wb-on-ink); }
+.step-last .step-sign { fill: var(--wb-amber); }
+.step-last .step-glyph { fill: var(--wb-ink); }
 
 .step-title {
-  margin: var(--sp-6) 0 var(--sp-2);
+  margin: var(--sp-5) 0 var(--sp-2);
   font-size: var(--fs-lead);
   font-weight: 600;
   color: var(--wb-ink);

@@ -15,7 +15,7 @@
 
   Behaviour
   - idle and peek blink every 4–6 s at random.
-  - With gaze on and the pointer still for 20 s, an idle mascot falls asleep; the next move wakes
+  - With gaze on and the pointer still for 10 s, an idle mascot falls asleep; the next move wakes
     it with a startled blink.
   - Gaze is off under prefers-reduced-motion and, unless a `target` is given, on coarse pointers.
     Reduced motion also stops the random blinks; the global CSS guard ends every keyframe at once.

@@ -1,9 +1,10 @@
 <!--
   SeatMap: the crew lobby seen from above, like the top deck of a bus (design.md §4.6).
   A 2 × 3 grid of seats sits inside a flat bus-outline SVG, with the LED sign `CREW <code>` above
-  the windscreen. The host sits front-left under a crown; members fill the other seats in join
-  order as mascots in their own colour; empty seats are dashed and read "Free seat".
-  The driver sits front-right, as on Singapore's right-hand-drive buses.
+  the windscreen. The driver sits front-right, as on Singapore's right-hand-drive buses, and the
+  host sits right behind them under a crown; members fill the other seats in join order as mascots
+  in their own colour; empty seats are dashed and read "Free seat". The list order (and so what a
+  screen reader hears) stays Seat 1 host, Seat 2, 3…; only the grid placement moves the host.
 
   UI only: no Realtime and no Supabase calls. The parent passes what it already has.
 
@@ -14,16 +15,25 @@
     code           the crew code, shown on the LED sign
     capacity       number of seats, host included                      (default 6)
     currentUserId  the viewer's user_id, to mark their seat "You"      (optional)
+    compact        smaller seats and mascots, so six seats fit on one screen   (default false)
+    showSign       draw the LED sign on top of the bus, as wide as its body   (default true)
+                   Pass false when the parent draws the sign itself.
+
+  Slots
+    sign-action    sits beside the LED sign, e.g. a "Copy code" button (the sign then shares the row)
 
   Accessibility: the seats are a real list. Each seat reads as one line ("Seat 1, Alex, host",
   "Seat 4, free seat"); the bus drawing and the mascots are decorative. Members pop into their
   seat with a small spring, skipped under prefers-reduced-motion.
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import LedBoard from '~/components/ui/LedBoard.vue'
 import WanderMascot from '~/components/ui/WanderMascot.vue'
+import type { MascotMood } from '~/components/ui/WanderMascot.vue'
+import { useMotionPrefs } from '~/composables/usePointer'
 import { userColor } from '~/utils/userColor'
+import { crewCheer } from '~/utils/crewCheer'
 
 interface CrewMember {
   user_id: string
@@ -37,12 +47,16 @@ const props = withDefaults(defineProps<{
   code: string | number
   capacity?: number
   currentUserId?: string
+  compact?: boolean
+  showSign?: boolean
 }>(), {
   members: () => [],
   hostName: 'Host',
   isHost: false,
   capacity: 6,
   currentUserId: '',
+  compact: false,
+  showSign: true,
 })
 
 interface Seat {
@@ -100,11 +114,56 @@ const seats = computed<Seat[]>(() => {
 const taken = computed(() => seats.value.filter((seat) => !seat.empty).length)
 const overflow = computed(() => Math.max(0, props.members.length - (seatCount.value - 1)))
 const sign = computed(() => `CREW ${props.code}`)
+const mascotSize = computed(() => (props.compact ? 30 : 48))
+
+/* ── the crew cheers when the ticket is torn ──
+   For CHEER_MS every seated mascot alternates a hop (happy) and a wave, each seat a beat behind
+   the one before, so the bus reads as a crowd. Reduced motion: one plain smile, no loop. */
+const CHEER_MS = 2400
+const CHEER_BEAT = 600
+const CHEER_STAGGER = 75
+const { reducedMotion } = useMotionPrefs()
+const cheerMoods = ref<Record<number, MascotMood>>({})
+let cheerTimers: ReturnType<typeof setTimeout>[] = []
+
+function stopCheer() {
+  cheerTimers.forEach(clearTimeout)
+  cheerTimers = []
+}
+
+function setMood(index: number, mood: MascotMood) {
+  cheerMoods.value = { ...cheerMoods.value, [index]: mood }
+}
+
+function cheer() {
+  stopCheer()
+  cheerMoods.value = {}
+  const riders = seats.value.map((seat, index) => (seat.empty ? -1 : index)).filter((index) => index >= 0)
+  if (reducedMotion.value) {
+    riders.forEach((index) => setMood(index, 'happy'))
+    cheerTimers.push(setTimeout(() => { cheerMoods.value = {} }, CHEER_MS))
+    return
+  }
+  riders.forEach((index, order) => {
+    const start = order * CHEER_STAGGER
+    for (let t = 0, beat = 0; t < CHEER_MS; t += CHEER_BEAT, beat++) {
+      const mood: MascotMood = beat % 2 ? 'wave' : 'happy'
+      cheerTimers.push(setTimeout(() => setMood(index, mood), start + t))
+    }
+    cheerTimers.push(setTimeout(() => setMood(index, 'idle'), start + CHEER_MS))
+  })
+}
+
+watch(crewCheer, cheer)
+onBeforeUnmount(stopCheer)
 </script>
 
 <template>
-  <div class="seat-map">
-    <LedBoard class="seat-map__sign" badge="" :line1="sign" :label="`Crew ${code}`" />
+  <div class="seat-map" :class="{ 'is-compact': compact }">
+    <div v-if="showSign" class="seat-map__sign-row">
+      <LedBoard class="seat-map__sign" badge="" :pitch="3" :line1="sign" :label="`Crew ${code}`" />
+      <slot name="sign-action" />
+    </div>
 
     <div class="bus">
       <!-- body outline, wheels, mirrors and rear grille: stretches with the seat grid -->
@@ -155,7 +214,7 @@ const sign = computed(() => `CREW ${props.code}`)
               aria-hidden="true"
             >
               <span class="seat__rider">
-                <WanderMascot :size="48" :color="seat.color" :gaze="false" />
+                <WanderMascot :size="mascotSize" :color="seat.color" :gaze="false" :mood="cheerMoods[index] ?? 'idle'" />
                 <span v-if="seat.host" class="seat__crown">
                   <i class="bi bi-award-fill" aria-hidden="true"></i>
                 </span>
@@ -183,9 +242,26 @@ const sign = computed(() => `CREW ${props.code}`)
   margin: 0 auto;
 }
 
+.seat-map.is-compact {
+  max-width: 340px;
+}
+
+/* the destination sign: small (3px dots), centred on top of the bus and as wide as its body
+   (the body spans 5% to 95% of the drawing); an action in the slot shares the row */
+.seat-map__sign-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin: 0 0 var(--sp-2);
+  padding: 0 5%;
+}
+
 .seat-map__sign {
-  margin: 0 auto var(--sp-3);
-  width: 88%;
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ── the bus ── */
@@ -261,9 +337,16 @@ const sign = computed(() => `CREW ${props.code}`)
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: var(--sp-5); /* the aisle */
   row-gap: var(--sp-3);
+  grid-auto-flow: row dense; /* members back-fill the front-left seat the host leaves free */
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* the host rides front-right, right behind the driver; the list order is unchanged */
+.seat.is-host {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .seat {
@@ -362,6 +445,52 @@ const sign = computed(() => `CREW ${props.code}`)
   text-align: center;
   color: var(--wb-muted);
   font-size: var(--fs-small);
+}
+
+/* compact: shorter seats and smaller riders, so six seats and the lobby header share one screen */
+/* compact also fits the 340px lobby column: 30px riders, tighter aisle and rows */
+.is-compact .bus {
+  padding: var(--sp-1) 10% var(--sp-4);
+}
+
+.is-compact .bus__cab {
+  margin-bottom: var(--sp-2);
+}
+
+.is-compact .bus__seats {
+  column-gap: var(--sp-4);
+  row-gap: 6px;
+}
+
+.is-compact .seat {
+  min-height: 62px;
+}
+
+.is-compact .seat__inner {
+  gap: 2px;
+  padding: 6px var(--sp-1) var(--sp-1);
+}
+
+.is-compact .seat__name,
+.is-compact .seat__tag {
+  line-height: 1.2;
+}
+
+.is-compact .seat__name,
+.is-compact .seat__free {
+  font-size: var(--fs-meta);
+}
+
+.is-compact .seat__crown {
+  top: -5px;
+  right: -9px;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
+.is-compact .seat-map__count {
+  margin-top: var(--sp-2);
 }
 
 /* a member drops into their seat with a small spring */

@@ -1,6 +1,7 @@
 <script setup>
 import SpinFilters from '~/components/spin/SpinFilters.vue';
 import SpinResults from '~/components/spin/SpinResults.vue';
+import BoardingIntro from '~/components/landing/BoardingIntro.vue';
 import { filterByAmens } from '~/composables/filterAmens';
 
 const { $supabase } = useNuxtApp()
@@ -135,6 +136,8 @@ async function saveTrip(){
 
 <template>
     <section class="container py-4 spin-page">
+        <!-- Welcome intro: once per session, right after logging in (or registering, then logging in) -->
+        <BoardingIntro />
         <h1 class="page-title">Spin a side quest</h1>
         <p v-if="selectedPlaceTemp" class="start-line">
             <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
