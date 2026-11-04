@@ -9,7 +9,7 @@ const props = defineProps({
     required: true
   }
 })
-
+const result = ref(null)
 const { $supabase } = useNuxtApp()
 const hostName = ref('Host')
 const isHost = ref(false)
@@ -26,8 +26,21 @@ const preferences = ref([])
 const locResponse = await useFetch('/api/onemap', {
     query: { value: startingLocation }
 })
+const submitted= ref(false)
+const response = await useFetch('/api/allBusStops')
 
 
+async function respin2(){
+
+  result.value = {...result.value,...respin(response.data.value,result.value.possibleStops)
+}
+}
+
+async function spin2(){
+  submitted.value=true
+  result.value = null
+  result.value = await spin(preferences.value,selectedPlace.value,travelTime.value,submitted.value)
+}
 
 
 onMounted(async () => {
@@ -186,7 +199,18 @@ async function leaveGroup() {
         :categories="Object.keys(categories)"
         v-model:preferences="preferences"
         :places="locResponse.data.value"
-        @submit="spin()"
+        @submit="spin2()"
+        />
+        <SpinResults
+        v-if="submitted"
+        :submitted="submitted"
+        :error-message="result?.errorMessage"
+        :chosen-stop="result?.chosenStop"
+        :stop-details="result?.stopDetails"
+        :start-details="result?.startDetails"
+        :starting-stops="result?.startingStops"
+        :preferences="preferences"
+        @reroll="respin2()"
         />
       </div>
     </div>
@@ -302,6 +326,9 @@ async function leaveGroup() {
   background: #f6f8fb;
   text-align: center;
   color: #4a5068;
+}
+.lobby-card :deep(.filters) {
+  position: static;
 }
 
 </style>
