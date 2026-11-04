@@ -10,6 +10,8 @@
     target  { x, y } in client coords to look at instead of the pointer; reactive, so a parent
             can feed it every frame (HeroChase). null = use the pointer.
     label   if set the mascot is announced (role="img"); otherwise aria-hidden.
+    hat     'captain' | null: a small captain's cap (the shop perk perk-mascot-captain). Drawn
+            inside the rig, so it hops, bobs and droops with the mascot.             (default null)
 
   Exposes `blink()` through a template ref.
 
@@ -35,6 +37,7 @@ const props = withDefaults(defineProps<{
   gaze?: boolean
   target?: { x: number; y: number } | null
   label?: string
+  hat?: 'captain' | null
 }>(), {
   mood: 'idle',
   color: 'var(--wb-green)',
@@ -42,6 +45,7 @@ const props = withDefaults(defineProps<{
   gaze: false,
   target: null,
   label: '',
+  hat: null,
 })
 
 const root = ref<SVGSVGElement | null>(null)
@@ -187,6 +191,14 @@ const a11y = computed(() =>
       <ellipse class="wm-arm wm-arm-r" cx="87" cy="64" rx="7" ry="10" vector-effect="non-scaling-stroke" :stroke-width="outline" />
 
       <text v-if="currentMood === 'sleepy'" class="wm-z" x="78" y="20">z</text>
+
+      <!-- captain's cap, drawn in its own 60 x 30 space and set on the crown of the head -->
+      <g v-if="hat === 'captain'" class="wm-hat" transform="translate(20 -3) rotate(-7 30 20)">
+        <path class="wm-hat-crown" d="M3 13 Q30 -3 57 13 L50 19 L10 19 Z" vector-effect="non-scaling-stroke" :stroke-width="outline" />
+        <rect class="wm-hat-band" x="10" y="18" width="40" height="6" rx="1" />
+        <path class="wm-hat-visor" d="M9 23 Q30 33 51 23 Q30 27 9 23 Z" />
+        <circle class="wm-hat-badge" cx="30" cy="12" r="3.5" vector-effect="non-scaling-stroke" :stroke-width="outline" />
+      </g>
     </g>
   </svg>
 </template>
@@ -242,6 +254,18 @@ const a11y = computed(() =>
   stroke: var(--wb-ink);
   transform-origin: center;
   transition: transform var(--t-ui) var(--ease-spring);
+}
+
+.wm-hat-crown {
+  fill: var(--wb-surface);
+  stroke: var(--wb-ink);
+  stroke-linejoin: round;
+}
+.wm-hat-band,
+.wm-hat-visor { fill: var(--wb-ink); }
+.wm-hat-badge {
+  fill: var(--wb-amber);
+  stroke: var(--wb-ink);
 }
 
 .wm-z {

@@ -13,6 +13,9 @@
   reduced-motion users get an instant tear after a short drag. The focus ring is drawn outside the
   stub's clip path (3px --wb-green, 4px out). The pointer-follow tilt is off after the tear and
   under reduced motion.
+
+  Sunset theme: the root carries .theme-sunset when the perk-ticket-sunset perk is on (useRewards),
+  and the body paper (plus its torn fibres) takes --wb-sunset-face instead of `background`.
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
@@ -538,6 +541,7 @@ watch(geo, () => {
   <div
     ref="root"
     class="tear-ticket"
+    :class="{ 'theme-sunset': useRewards().isOn('perk-ticket-sunset') }"
     :data-used="used ? '' : undefined"
     :data-orientation="orientation"
     :data-shift="used && recenter ? (vertical ? 'y' : 'x') : undefined"
@@ -825,6 +829,10 @@ watch(geo, () => {
   stroke-linecap: round;
   opacity: 0;
 }
+
+/* Sunset theme: apricot body paper; the stub keeps its own background (the travel-time band) */
+.tear-ticket.theme-sunset .tear-ticket__paper--body { background: var(--wb-sunset-face); }
+.tear-ticket.theme-sunset .tear-ticket__fibres path { stroke: var(--wb-sunset-face); }
 
 @media (prefers-reduced-motion: reduce) {
   .tear-ticket__stage,

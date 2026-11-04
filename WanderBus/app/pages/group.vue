@@ -38,6 +38,35 @@ onMounted(async () => {
     }
 
     currentGroup.value = membership
+
+    // auto-open the lobby (boss approved): load the crew's groups row, the same shape
+    // createGroup/joinGroup put in currentGroup, and go straight to the lobby
+    if (membership) {
+      const { data: group, error: groupError } = await $supabase
+        .from('groups')
+        .select('group_code, host_id')
+        .eq('group_code', membership.group_code)
+        .maybeSingle()
+
+      if (groupError) throw groupError
+
+      if (group) {
+        currentGroup.value = group
+        showLobby.value = true
+      } else {
+        // stale membership: the crew is gone, so drop the leftover row (plan §3) and show the join page instead
+        const { error: staleError } = await $supabase
+          .from('group_members')
+          .delete()
+          .eq('group_code', membership.group_code)
+          .eq('user_id', data.user.id)
+        if (staleError) console.log(staleError)
+
+        currentGroup.value = null
+        alreadyInGroup.value = false
+        toast.info('That crew has ended. Host a new one or join with a code.')
+      }
+    }
   } catch (error) {
     console.log(error)
     joinError.value = 'Couldn’t check if you’re already in a crew. Refresh the page to try again.'

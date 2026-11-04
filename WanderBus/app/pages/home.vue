@@ -113,6 +113,7 @@ async function saveTrip(){
             const {data, error} = await $supabase.from('passport_entries').insert({
                 starting_stop: startDetails.value.Description,
                 end_stop: stopDetails.value.Description,
+                end_stop_code: stopDetails.value.BusStopCode,
                 time_taken: Math.ceil(chosenStop.value.chosen.totalTime),
                 bus_taken:chosenStop.value.chosen.bus,
                 starting_location: selectedPlace.value.ADDRESS
@@ -132,6 +133,16 @@ async function saveTrip(){
             savingTrip.value = false
         }
     }
+
+// added for End adventure (boss approved): back to a fresh spin once the adventure ends
+function resetSpin() {
+    submitted.value = false
+    chosenStop.value = ''
+    ticketOptions.value = []
+    errorMessage.value = ''
+    stopDetails.value = ''
+    startDetails.value = ''
+}
 </script>
 
 <template>
@@ -165,6 +176,7 @@ async function saveTrip(){
                 :bus-stops="response.data.value ?? []"
                 :stop-details="stopDetails"
                 :start-details="startDetails"
+                :start-place="selectedPlace"
                 :starting-stops="startingStops"
                 :preferences="preferences"
                 :amenities="amenStops.data.value ?? {}"
@@ -174,6 +186,7 @@ async function saveTrip(){
                 @choose="chooseTicket($event)"
                 @retry="update()"
                 @save-trip="saveTrip()"
+                @end-adventure="resetSpin()"
             />
         </div>
     </section>

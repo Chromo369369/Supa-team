@@ -22,6 +22,7 @@ import WanderMascot from '~/components/ui/WanderMascot.vue';
 import { useMotionPrefs } from '~/composables/usePointer';
 import { categoryInfo } from '~/utils/spinCategories';
 import { cheerCrew } from '~/utils/crewCheer';
+import { useAdventure } from '~/composables/useAdventure';
 
 const props = defineProps({
     submitted: Boolean,
@@ -42,12 +43,15 @@ const props = defineProps({
     startingStops: [Object, String],
     preferences: { type: Array, default: () => [] },
     /** /api/allAmenities: { stopCode: { category: [names] } } */
-    amenities: { type: Object, default: () => ({}) }
+    amenities: { type: Object, default: () => ({}) },
+    /** The OneMap place the spin started from ({ ADDRESS, ... }); shown as the first step. Optional. */
+    startPlace: { type: [Object, String], default: '' }
 })
 
-const emit = defineEmits(['reroll', 'saveTrip', 'choose', 'retry'])
+const emit = defineEmits(['reroll', 'saveTrip', 'choose', 'retry', 'endAdventure'])
 
 const { reducedMotion } = useMotionPrefs()
+const adventure = useAdventure()
 
 const torn = ref(false)
 // A new ticket every spin, even if the same stop comes up twice.
@@ -120,6 +124,7 @@ let confettiFor = -1
 function onTear() {
     torn.value = true
     cheerCrew()
+    startAdventure()
     if (confettiFor === ticketKey.value) return
     confettiFor = ticketKey.value
     const stage = revealEl.value?.querySelector('.tear-ticket__stage')
@@ -138,12 +143,61 @@ const totalMin = computed(() => (trip.value ? Math.ceil(trip.value.totalTime) : 
 // The same minutes and the same rule as the belt, so the ticket keeps the colour it rode in on.
 // The lobby has no belt and keeps the default green.
 const band = computed(() => (usesBelt.value && trip.value ? bandFor(totalMin.value) : 'short'))
+// The ride itself: the total minus the walk to the stop, never under a minute.
+const rideMin = computed(() => Math.max(1, totalMin.value - walkMin.value))
+
+// Solo only (the belt means /home): the torn ticket starts the adventure the bar and timer follow.
+// The trip carries the same fields home.vue's saveTrip inserts, so the End dialog can save it from any page.
+function startAdventure() {
+    if (!usesBelt.value || !trip.value) return
+    adventure.start({
+        trip: {
+            starting_stop: props.startDetails.Description,
+            end_stop: props.stopDetails.Description,
+            time_taken: totalMin.value,
+            bus_taken: trip.value.bus,
+            starting_location: props.startPlace?.ADDRESS,
+            end_stop_code: props.stopDetails.BusStopCode
+        },
+        stopName: props.stopDetails.Description,
+        bus: trip.value.bus ?? null
+    })
+}
+
+// Save trip: tell the adventure once the save went through, so the End dialog doesn't offer it twice.
+watch(() => props.saved, (saved) => {
+    if (saved && usesBelt.value && adventure.active.value) adventure.markSaved()
+})
+
+// Ending (from here, the bar or its dialog) tells the page, so /home can go back to a fresh spin.
+let offEnd = null
+onMounted(() => {
+    if (usesBelt.value) offEnd = adventure.onEnd(() => emit('endAdventure'))
+})
+onBeforeUnmount(() => offEnd?.())
 
 // Home: back to the search and a fresh belt. Lobby: the crew's own reroll.
 function spinAgain() {
     if (usesBelt.value) emit('retry')
     else emit('reroll')
 }
+// OneMap sends addresses in capitals; show them in title case (display only, numbers untouched).
+const SMALL_WORDS = new Set(['of', 'and', 'the', 'at', 'by', 'on', 'in', 'for', 'to'])
+const ACRONYMS = new Set(['MRT', 'LRT', 'HDB', 'NTUC', 'NUS', 'NTU', 'SMU', 'SUTD', 'ITE', 'CPF', 'LTA', 'URA', 'JTC', 'MOE', 'ICA', 'CBD', 'YMCA', 'YWCA', 'SAFRA', 'PCF', 'RC', 'CC', 'DBS', 'POSB', 'OCBC', 'UOB', 'SGH', 'KKH', 'NUH', 'CGH', 'TTSH', 'II', 'III', 'IV', 'PIE', 'AYE', 'CTE', 'ECP', 'KPE', 'TPE', 'SLE', 'BKE'])
+function titleCase(text) {
+    if (!text) return ''
+    return text.split(/\s+/).map((word, i) => {
+        if (/\d/.test(word)) return word
+        const bare = word.replace(/[^A-Za-z]/g, '').toUpperCase()
+        if (ACRONYMS.has(bare)) return word.toUpperCase()
+        const lower = word.toLowerCase()
+        if (i > 0 && SMALL_WORDS.has(lower)) return lower
+        // capitalise each part: "Kampong-Bahru", "(Bukit Timah)", but "Andrew's" keeps a small s
+        return lower.replace(/(^|[-/(])([a-z])/g, (m, lead, ch) => lead + ch.toUpperCase())
+    }).join(' ')
+}
+const startAddress = computed(() => titleCase(props.startPlace?.ADDRESS))
+const startLabel = computed(() => startAddress.value || 'your starting point')
 const walkingLink = computed(() => {
     const stop = props.startDetails
     return stop ? `https://www.google.com/maps/dir/?api=1&destination=${stop.Latitude},${stop.Longitude}&travelmode=walking` : ''
@@ -260,7 +314,7 @@ const announcement = computed(() => {
                                     <dd class="pass-value">{{ startDetails.Description }}</dd>
                                     <dd class="pass-sub">Stop <span class="num">{{ trip.boardAt }}</span>, {{ startDetails.RoadName }}</dd>
                                 </template>
-                                <dd v-else class="pass-value">Your starting point</dd>
+                                <dd v-else class="pass-value">{{ startAddress || 'Your starting point' }}</dd>
                             </div>
                             <div class="pass-end">
                                 <dt class="pass-label">To</dt>
@@ -270,6 +324,10 @@ const announcement = computed(() => {
                         </dl>
 
                         <ol class="legs">
+                            <li>
+                                <span class="leg-icon leg-icon--start" aria-hidden="true"><i class="bi bi-house-door"></i></span>
+                                <div class="leg-body"><p class="leg">Start at {{ startLabel }}</p></div>
+                            </li>
                             <li>
                                 <span class="leg-icon" aria-hidden="true"><i class="bi bi-person-walking"></i></span>
                                 <div v-if="trip.bus" class="leg-body">
@@ -292,13 +350,12 @@ const announcement = computed(() => {
                                 <li>
                                     <span class="leg-icon" aria-hidden="true"><i class="bi bi-arrow-down"></i></span>
                                     <div class="leg-body"><p class="leg">Ride the bus</p></div>
-                                    <span class="leg-time"><span class="num">{{ trip.stops }}</span> stops</span>
+                                    <span class="leg-time"><span class="num">{{ trip.stops }}</span> stops · about <span class="num">{{ rideMin }}</span> min</span>
                                 </li>
                             </template>
                             <li>
                                 <span class="leg-icon leg-icon--arrive" aria-hidden="true"><i class="bi bi-geo-alt-fill"></i></span>
                                 <div class="leg-body"><p class="leg">{{ trip.bus ? 'Get off at' : 'Arrive at' }} {{ stopDetails.Description }}</p></div>
-                                <span class="leg-time"><span class="num">{{ totalMin }}</span> min</span>
                             </li>
                         </ol>
                     </section>
@@ -335,6 +392,12 @@ const announcement = computed(() => {
                         <span class="save-slot" :class="{ 'is-stamped': saved && !reducedMotion }">
                             <SpinSubmit :submitted="true" :saving="saving" :saved="saved" @save-trip="$emit('saveTrip')" />
                         </span>
+                    </div>
+                    <div v-if="usesBelt" class="end-row">
+                        <button type="button" class="btn btn-wb-ghost" @click="adventure.endPrompt.value = true">
+                            <i class="bi bi-flag" aria-hidden="true"></i>
+                            End adventure
+                        </button>
                     </div>
                 </template>
             </template>
@@ -497,11 +560,9 @@ const announcement = computed(() => {
 }
 
 .pass-label {
-  font-size: var(--fs-meta);
+  font-size: var(--fs-small);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--wb-muted);
+  color: var(--wb-text-2);
 }
 
 .pass-value {
@@ -558,6 +619,11 @@ const announcement = computed(() => {
   background: var(--wb-surface-2);
   color: var(--wb-ink);
   font-size: var(--fs-body);
+}
+
+.leg-icon--start {
+  background: var(--wb-ink);
+  color: var(--wb-on-ink);
 }
 
 .leg-icon--arrive {
@@ -668,6 +734,13 @@ const announcement = computed(() => {
   justify-content: center;
   gap: var(--sp-3);
   margin-top: 28px;
+}
+
+/* Ending is the quiet way out: below the trip actions, on its own line */
+.end-row {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--sp-3);
 }
 
 /* Saved: the button lands like a passport stamp (scale 1.15 → 1, 250 ms) */

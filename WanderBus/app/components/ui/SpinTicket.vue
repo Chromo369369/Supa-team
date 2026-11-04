@@ -9,6 +9,10 @@
   colour it rode in on. short = green stub with white text (5.39:1), medium = amber stub with ink
   text (8.45:1), long = ink stub with white text (17.1:1). The default is short (green).
 
+  Sunset theme: with the shop perk perk-ticket-sunset switched on (useRewards), the root gets
+  .theme-sunset and the paper turns apricot with warm ink text (--wb-sunset-*). The band stub
+  keeps its travel-time colour.
+
   Horizontal tickets are drawn at the container's own width (from 280px up to 580px), so the right
   edge meets its container's edge.
 -->
@@ -119,7 +123,7 @@ function onTear() {
     <div
         ref="wrap"
         class="spin-ticket"
-        :class="{ 'spin-ticket--narrow': narrow, 'spin-ticket--vertical': vertical, 'spin-ticket--strip': compact }"
+        :class="{ 'spin-ticket--narrow': narrow, 'spin-ticket--vertical': vertical, 'spin-ticket--strip': compact, 'theme-sunset': useRewards().isOn('perk-ticket-sunset') }"
         :style="{ '--st-accent': colours.fill, '--st-on-accent': colours.ink }"
     >
         <!-- border-width 4 shows a 2px ink outline: the paper covers the stroke's inner half. -->
@@ -485,6 +489,22 @@ function onTear() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Sunset theme (perk-ticket-sunset): apricot paper, warm ink. Ink 13.84:1 and text-2 7.78:1 on
+   the face; the icon disc is face-2 (ink 11.51:1). The paper itself is set in TearTicket. */
+.theme-sunset .ticket-icon { background: var(--wb-sunset-face-2); color: var(--wb-sunset-ink); }
+.theme-sunset .ticket-title,
+.theme-sunset .bus-number,
+.theme-sunset .detail-value,
+.theme-sunset .strip-bus,
+.theme-sunset .strip-rows dd { color: var(--wb-sunset-ink); }
+.theme-sunset .ticket-subtitle,
+.theme-sunset .ticket-time,
+.theme-sunset .detail-label,
+.theme-sunset .detail-muted,
+.theme-sunset .strip-meta,
+.theme-sunset .strip-rows dt { color: var(--wb-sunset-text-2); }
+.theme-sunset .ticket-barcode { fill: var(--wb-sunset-line); }
 
 /* Face -> details */
 .reveal-enter-active {

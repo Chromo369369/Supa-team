@@ -3,6 +3,8 @@
     import PlaceCard from '~/components/stop/PlaceCard.vue';
     import ActivityCard from '~/components/stop/ActivityCard.vue';
     import ActivityForm from '~/components/stop/ActivityForm.vue';
+    import PhotoStrip from '~/components/stop/PhotoStrip.vue';
+    import PhotoViewer from '~/components/ui/PhotoViewer.vue';
     //Check for session validity first
     definePageMeta( {middleware: 'auth' })
 
@@ -26,6 +28,8 @@
     const selectedSub = ref('all')        // cafe, park, museum... inside the selected section
     const showKinds = reactive({ signpost: true, challenge: true })   // the signposts / challenges pills
     const selectedId = ref('')            // a place id or an activity key ('signpost:12')
+    const search = ref(typeof route.query.q === 'string' ? route.query.q : '')   // the search field, kept in ?q=
+    const searchInput = ref(null)
 
     const { photosByPlace, loadError: photosError, loadPhotosNear, uploadPhoto } = usePlacePhotos()
     const { activities, loadError: activitiesError, loadActivities, saveActivity, deleteActivity, toggleHelpful, completeChallenge } = useStopActivities()
@@ -57,13 +61,66 @@
         }
     }, { immediate: true })
 
-    watch([tab, selectedSection, selectedSub], ([tabKey, section, sub]) => {
-        let query = { ...route.query, section }
+    // every filter is written at once, so two quick changes can't overwrite each other's part of the URL
+    function syncQuery() {
+        let query = { ...route.query, section: selectedSection.value }
         delete query.tab
         delete query.sub
-        if (tabKey !== 'all') query.tab = tabKey
-        if (sub !== 'all') query.sub = sub
+        delete query.q
+        if (tab.value !== 'all') query.tab = tab.value
+        if (selectedSub.value !== 'all') query.sub = selectedSub.value
+        if (search.value.trim()) query.q = search.value.trim()
         router.replace({ query })
+    }
+
+    watch([tab, selectedSection, selectedSub], syncQuery)
+
+    // typing filters right away, the URL catches up once the typing pauses
+    let searchTimer = null
+    watch(search, () => {
+        clearTimeout(searchTimer)
+        searchTimer = setTimeout(syncQuery, 300)
+    })
+
+    function clearSearch() {
+        search.value = ''
+        searchInput.value?.focus()
+    }
+
+    // case and accents don't matter: "Cafe" finds "Café"
+    function normalise(text) {
+        return String(text ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    }
+
+    const searchTerm = computed(() => normalise(search.value).trim())
+
+    // the search runs first, then the chips and pills filter what's left (so their counts follow the search)
+    const matchedPlaces = computed(() => searchTerm.value
+        ? data.value.places.filter(place => normalise(place.name).includes(searchTerm.value))
+        : data.value.places)
+
+    const matchedActivities = computed(() => searchTerm.value
+        ? activities.value.filter(activity => [activity.title, activity.note, activity.description].some(text => normalise(text).includes(searchTerm.value)))
+        : activities.value)
+
+    // every photo around the stop (the same ones the place cards get), newest first, for the strip at the top of Places.
+    // a photo outside the walking circle (the query is a box) has no place in the list, so it's left out
+    const stripViewer = ref(null)
+    const stripPhotos = computed(() => {
+        let names = Object.fromEntries((data.value?.places ?? []).map(place => [place.id, place.name]))
+        return Object.entries(photosByPlace.value)
+            .flatMap(([placeId, photos]) => placeId in names ? photos.map(photo => ({ ...photo, placeName: names[placeId] })) : [])
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 24)
+            .map(photo => ({
+                id: photo.id,
+                url: photo.url,
+                placeName: photo.placeName,
+                caption: photo.placeName,
+                alt: `Photo of ${photo.placeName}`,
+                isPioneer: photo.is_pioneer,
+                createdAt: photo.created_at
+            }))
     })
 
     async function handleUpload(place, file) {
@@ -83,32 +140,33 @@
     // how many places per section and per sub-filter, and how many signposts/challenges
     const counts = computed(() => {
         let total = { all: 0, sections: {}, subs: {}, kinds: { signpost: 0, challenge: 0 } }
-        for (let place of data.value.places) {
+        for (let place of matchedPlaces.value) {
             total.all += 1
             total.sections[place.section] = (total.sections[place.section] ?? 0) + 1
             total.subs[place.category] = (total.subs[place.category] ?? 0) + 1
         }
-        for (let activity of activities.value) total.kinds[activity.kind] += 1
+        for (let activity of matchedActivities.value) total.kinds[activity.kind] += 1
         return total
     })
 
     const tabCounts = computed(() => ({
-        all: counts.value.all + activities.value.length,
+        all: counts.value.all + matchedActivities.value.length,
         places: counts.value.all,
-        activities: activities.value.length
+        activities: matchedActivities.value.length
     }))
 
-    // every section chip always shows, an empty one gets a "no nearby ..." message instead
+    // every section chip always shows, an empty one gets a "no nearby ..." message instead.
+    // a sub-filter with no matches for the search hides, unless it's the one that's on
     const shownSubs = computed(() => Object.keys(placeSubcategoryInfo).filter(key =>
-        placeSubcategories[key].section === selectedSection.value && counts.value.subs[key] > 0
+        placeSubcategories[key].section === selectedSection.value && (counts.value.subs[key] > 0 || key === selectedSub.value)
     ))
 
-    // the spin picks that have something here (a pick with nothing nearby isn't worth mentioning)
-    const shownPicks = computed(() => data.value.preferred.filter(key => counts.value.subs[key] > 0))
+    // the spin picks that have something here (a pick with nothing nearby isn't worth mentioning). Not affected by the search
+    const shownPicks = computed(() => data.value.preferred.filter(key => data.value.places.some(place => place.category === key)))
 
     const shownPlaces = computed(() => {
         if (tab.value === 'activities') return []
-        let places = data.value.places
+        let places = matchedPlaces.value
         if (selectedSection.value !== 'all') places = places.filter(place => place.section === selectedSection.value)
         if (selectedSub.value !== 'all') places = places.filter(place => place.category === selectedSub.value)
         return places
@@ -117,7 +175,7 @@
     // the one being edited is hidden, its draggable draft pin stands in for it
     const shownActivities = computed(() => {
         if (tab.value === 'places') return []
-        return activities.value.filter(activity => showKinds[activity.kind] && !(draft.value && draft.value.editing === activity))
+        return matchedActivities.value.filter(activity => showKinds[activity.kind] && !(draft.value && draft.value.editing === activity))
     })
 
     // all tab mixes both, closest to the stop first
@@ -228,6 +286,7 @@
     onBeforeUnmount(() => {
         window.removeEventListener('keydown', onWindowKey)
         clearTimeout(freshTimer)
+        clearTimeout(searchTimer)
     })
 
     function moveDraft(lat, lon) {
@@ -389,6 +448,35 @@
             </div>
 
             <div id="stop-panel" role="tabpanel" :aria-labelledby="`stop-tab-${tab}`">
+                <!-- the photos around the stop as one curved, streaming row; a tile opens the coverflow at that photo -->
+                <template v-if="tab === 'places' && stripPhotos.length >= 3">
+                    <PhotoStrip :photos="stripPhotos" @open="index => stripViewer.open(index)" />
+                    <PhotoViewer ref="stripViewer" :photos="stripPhotos" title="Photos around this stop" />
+                </template>
+
+                <!-- filters what's already loaded as you type: places by name, signposts/challenges by their text -->
+                <div class="stop-search" role="search">
+                    <label for="stop-search-input" class="search-label">Search places</label>
+                    <div class="search-field">
+                        <i class="bi bi-search search-icon" aria-hidden="true"></i>
+                        <input
+                            id="stop-search-input"
+                            ref="searchInput"
+                            v-model="search"
+                            type="search"
+                            class="form-control search-input"
+                            placeholder="A name, a note or a challenge…"
+                            autocomplete="off"
+                            spellcheck="false"
+                            enterkeyhint="search"
+                        />
+                        <button v-if="search" type="button" class="search-clear" aria-label="Clear search" @click="clearSearch">
+                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <p class="visually-hidden" aria-live="polite">{{ searchTerm ? `${listItems.length} ${listItems.length === 1 ? 'match' : 'matches'} for ${search.trim()}` : '' }}</p>
+                </div>
+
                 <div class="chip-row">
                     <div v-if="tab !== 'activities'" class="chip-group" role="group" aria-label="Kind of place">
                         <button type="button" class="btn-chip" :class="{ active: selectedSection === 'all' }" :aria-pressed="selectedSection === 'all' ? 'true' : 'false'" @click="pickSection('all')">
@@ -531,8 +619,18 @@
                             </button>
                         </div>
 
-                        <template v-if="tab !== 'activities'">
-                            <div v-if="counts.all === 0" class="empty-state">
+                        <!-- the search found nothing in this view -->
+                        <div v-if="searchTerm && listItems.length === 0 && !draft" class="empty-state">
+                            <i class="bi bi-search empty-icon" aria-hidden="true"></i>
+                            <p class="empty-title">{{ tab === 'activities' ? 'No signposts or challenges match' : 'No places match' }} “{{ search.trim() }}”</p>
+                            <p class="stop-note">Check the spelling, try a shorter word, or turn off a filter above.</p>
+                            <button type="button" class="btn-wb btn-wb-secondary btn-sm empty-action" @click="clearSearch">
+                                <i class="bi bi-x-lg" aria-hidden="true"></i> Clear search
+                            </button>
+                        </div>
+
+                        <template v-else-if="tab !== 'activities' && !searchTerm">
+                            <div v-if="data.places.length === 0" class="empty-state">
                                 <i class="bi bi-compass empty-icon" aria-hidden="true"></i>
                                 <p class="empty-title">Uncharted territory</p>
                                 <p class="stop-note">
@@ -547,7 +645,7 @@
                             </div>
                         </template>
 
-                        <div v-if="tab === 'activities' && shownActivities.length === 0 && !draft && !activitiesError" class="empty-state">
+                        <div v-if="tab === 'activities' && !searchTerm && shownActivities.length === 0 && !draft && !activitiesError" class="empty-state">
                             <i class="bi bi-signpost-2 empty-icon" aria-hidden="true"></i>
                             <p class="empty-title">No signposts or challenges yet</p>
                             <p class="stop-note">
@@ -730,6 +828,78 @@
 .stop-tab:focus-visible {
   outline: 3px solid var(--wb-green);
   outline-offset: 2px;
+}
+
+/* search: a labelled field with its own clear button (the browser's own one is hidden) */
+.stop-search {
+  max-width: 480px;
+  margin-bottom: var(--sp-4);
+}
+
+.search-label {
+  display: block;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--wb-ink);
+  margin-bottom: var(--sp-1);
+}
+
+.search-field {
+  position: relative;
+}
+
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--sp-3);
+  translate: 0 -50%;
+  color: var(--wb-text-2);
+  pointer-events: none;
+}
+
+.search-input {
+  min-height: 48px;
+  padding-left: calc(var(--sp-3) + 24px);
+  padding-right: 48px;
+  background: var(--wb-surface);
+}
+
+.search-input::placeholder {
+  color: var(--wb-muted);
+}
+
+.search-input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.search-clear {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--wb-text-2);
+}
+
+.search-clear:hover {
+  color: var(--wb-ink);
+  background: var(--wb-surface-2);
+}
+
+.search-clear:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: -3px;
+}
+
+.empty-action {
+  margin-top: var(--sp-3);
 }
 
 .chip-row {

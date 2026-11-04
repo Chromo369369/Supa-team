@@ -50,6 +50,22 @@
   --cat-shopping: #b8860b;  --cat-shopping-tint: #fbf1da;
   --cat-challenge: #1f5fbf; --cat-challenge-tint: #e8f0fc;
 
+  /* card rarity (CardCollection): one colour per tier, used for the band, the mascot and the art tint.
+     Band text: white on common 6.16:1, rare 6.09:1, epic 8.60:1; ink on legendary gold 7.59:1.
+     As text on their own tint: common 5.30:1, rare 5.22:1, epic 7.26:1 (gold is a fill only). */
+  --wb-rarity-common: #5b6175;     --wb-rarity-common-tint: #eceef3;
+  --wb-rarity-rare: #1f5fbf;       --wb-rarity-rare-tint: #e6eefc;
+  --wb-rarity-epic: #7b2d6e;       --wb-rarity-epic-tint: #f6e8f2;   /* plum, not violet */
+  --wb-rarity-legendary: #e3a008;  --wb-rarity-legendary-tint: #fdf2cf;
+
+  /* ticket theme: sunset (shop perk perk-ticket-sunset). Ink 13.84:1 on the face, 11.51:1 on face-2;
+     text-2 7.78:1 on the face, 6.47:1 on face-2. line is decoration only (barcode). */
+  --wb-sunset-face:   #ffe0c2;
+  --wb-sunset-face-2: #ffc79a;
+  --wb-sunset-ink:    #2b1408;
+  --wb-sunset-text-2: #6e3313;
+  --wb-sunset-line:   #f0b083;
+
   /* type */
   --font-display: "Fredoka", "Lexend Deca", system-ui, sans-serif;
   --font-ui:      "Lexend Deca", system-ui, -apple-system, "Segoe UI", sans-serif;

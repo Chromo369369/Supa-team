@@ -19,6 +19,8 @@
   slots so one to three tickets still ride a real stadium; rect hit-test (at least 44px);
   the dish dialog is gone: picking a ticket flies it (the source's opening animate() keyframes,
   as a FLIP onto a fixed clone) to the rect `flyTo()` returns, then emits choose(index).
+  Sunset theme: with the shop perk perk-ticket-sunset on (useRewards), each ticket gets .theme-sunset
+  and its paper turns apricot with warm ink (--wb-sunset-*); the band stub keeps its colour.
   Autoplay is off by default. Nothing about the bus, the stop or the road is ever passed in.
 
   Props
@@ -903,6 +905,7 @@ function onKeyDown(event: KeyboardEvent) {
                     :ref="(el) => setRef(plates, i, el)"
                     type="button"
                     class="belt-ticket"
+                    :class="{ 'theme-sunset': useRewards().isOn('perk-ticket-sunset') }"
                     :data-ticket="i"
                     :data-active="active === i || undefined"
                     :tabindex="i === roving ? 0 : -1"
@@ -1156,6 +1159,10 @@ function onKeyDown(event: KeyboardEvent) {
   font-weight: 600;
   text-anchor: middle;
 }
+
+/* Sunset theme: apricot paper, warm ink letter (13.84:1) */
+.belt-ticket.theme-sunset .face-paper { fill: var(--wb-sunset-face); }
+.belt-ticket.theme-sunset .face-letter { fill: var(--wb-sunset-ink); }
 
 .face-shade {
   fill: #000;

@@ -6,7 +6,8 @@
   in their own colour; empty seats are dashed and read "Free seat". The list order (and so what a
   screen reader hears) stays Seat 1 host, Seat 2, 3…; only the grid placement moves the host.
 
-  UI only: no Realtime and no Supabase calls. The parent passes what it already has.
+  UI only: no Realtime. The one read is each rider's best badge (useBadges, batched and cached),
+  shown as a small mark on their mascot with its name in the seat's label and a tooltip.
 
   Props
     members        crew members other than the host: [{ user_id, display_name }]
@@ -15,6 +16,7 @@
     code           the crew code, shown on the LED sign
     capacity       number of seats, host included                      (default 6)
     currentUserId  the viewer's user_id, to mark their seat "You"      (optional)
+    hostId         the host's user_id, for the host's badge              (optional)
     compact        smaller seats and mascots, so six seats fit on one screen   (default false)
     showSign       draw the LED sign on top of the bus, as wide as its body   (default true)
                    Pass false when the parent draws the sign itself.
@@ -47,6 +49,7 @@ const props = withDefaults(defineProps<{
   code: string | number
   capacity?: number
   currentUserId?: string
+  hostId?: string
   compact?: boolean
   showSign?: boolean
 }>(), {
@@ -55,6 +58,7 @@ const props = withDefaults(defineProps<{
   isHost: false,
   capacity: 6,
   currentUserId: '',
+  hostId: '',
   compact: false,
   showSign: true,
 })
@@ -62,6 +66,7 @@ const props = withDefaults(defineProps<{
 interface Seat {
   number: number
   key: string
+  userId: string
   name: string
   color: string
   host: boolean
@@ -79,6 +84,7 @@ const seats = computed<Seat[]>(() => {
   list.push({
     number: 1,
     key: 'host',
+    userId: props.hostId,
     name: hostName,
     color: userColor(hostName),
     host: true,
@@ -92,7 +98,7 @@ const seats = computed<Seat[]>(() => {
     const member = riders[i - 1]
     const number = i + 1
     if (!member) {
-      list.push({ number, key: `free-${number}`, name: '', color: '', host: false, you: false, empty: true, label: `Seat ${number}, free seat` })
+      list.push({ number, key: `free-${number}`, userId: '', name: '', color: '', host: false, you: false, empty: true, label: `Seat ${number}, free seat` })
       continue
     }
     const name = member.display_name || FALLBACK_NAME
@@ -100,6 +106,7 @@ const seats = computed<Seat[]>(() => {
     list.push({
       number,
       key: member.user_id,
+      userId: member.user_id,
       name,
       color: userColor(member.display_name || member.user_id),
       host: false,
@@ -110,6 +117,12 @@ const seats = computed<Seat[]>(() => {
   }
   return list
 })
+
+// each rider's best badge (one batched read for the whole bus)
+const badges = useBadges()
+const riderIds = computed(() => seats.value.map((seat) => seat.userId).filter(Boolean))
+watch(riderIds, (ids) => { if (ids.length) badges.forUsers(ids) }, { immediate: true })
+const badgeOf = (seat: Seat) => (seat.userId ? badges.bestOf(seat.userId) : null)
 
 const taken = computed(() => seats.value.filter((seat) => !seat.empty).length)
 const overflow = computed(() => Math.max(0, props.members.length - (seatCount.value - 1)))
@@ -196,7 +209,7 @@ onBeforeUnmount(stopCheer)
           class="seat"
           :class="{ 'is-empty': seat.empty, 'is-host': seat.host, 'is-you': seat.you }"
         >
-          <span class="visually-hidden">{{ seat.label }}</span>
+          <span class="visually-hidden">{{ seat.label }}<template v-if="badgeOf(seat)">, badge: {{ badgeOf(seat)!.name }}</template></span>
           <Transition name="seat-pop" mode="out-in" appear>
             <span
               v-if="seat.empty"
@@ -217,6 +230,9 @@ onBeforeUnmount(stopCheer)
                 <WanderMascot :size="mascotSize" :color="seat.color" :gaze="false" :mood="cheerMoods[index] ?? 'idle'" />
                 <span v-if="seat.host" class="seat__crown">
                   <i class="bi bi-award-fill" aria-hidden="true"></i>
+                </span>
+                <span v-if="badgeOf(seat)" class="seat__badge" :title="badgeOf(seat)!.name">
+                  <i class="bi" :class="badgeOf(seat)!.icon || 'bi-award'" aria-hidden="true"></i>
                 </span>
               </span>
               <span class="seat__name" :title="seat.name">{{ seat.name }}</span>
@@ -415,6 +431,22 @@ onBeforeUnmount(stopCheer)
   background: var(--wb-amber);
   border: 2px solid var(--wb-surface-2);
   color: var(--wb-ink);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.seat__badge {
+  position: absolute;
+  bottom: -4px;
+  left: -10px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--wb-rarity-legendary-tint);
+  border: 2px solid var(--wb-surface-2);
+  color: var(--wb-amber-ink);
   font-size: 12px;
   line-height: 1;
 }

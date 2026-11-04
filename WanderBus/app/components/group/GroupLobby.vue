@@ -64,6 +64,7 @@ async function saveTrip(){
             const {data, error} = await $supabase.from('passport_entries').insert({
                 starting_stop: sharedSpin.value.startDetails.Description,
                 end_stop: sharedSpin.value.stopDetails.Description,
+                end_stop_code: sharedSpin.value.stopDetails.BusStopCode,
                 time_taken: Math.ceil(sharedSpin.value.chosenStop.chosen.totalTime),
                 bus_taken: sharedSpin.value.chosenStop.chosen.bus,
                 starting_location: sharedSpin.value.startingAddress
@@ -258,6 +259,7 @@ async function copyCode() {
             :show-sign="true"
             :members="groupMembers"
             :host-name="hostName"
+            :host-id="group.host_id"
             :is-host="isHost"
             :code="group.group_code"
             :current-user-id="currentUserId"
@@ -356,7 +358,7 @@ async function copyCode() {
             <p>No ticket without a host and a crew.</p>
           </div>
         </div>
-        <div v-else-if="isHost && !ready" class="ticket-wait">
+        <div v-else-if="isHost && !ready && !sharedSpin" class="ticket-wait">
           <WanderMascot mood="idle" :size="64" />
           <div>
             <h2>Crew ticket</h2>
@@ -387,13 +389,14 @@ async function copyCode() {
         </Transition>
         <Transition name="ticket-in" appear>
           <SpinResults
-            v-if="!isHost && sharedSpin"
+            v-if="!submitted && sharedSpin"
             :submitted="true"
             :chosen-stop="sharedSpin.chosenStop"
             :stop-details="sharedSpin.stopDetails"
             :start-details="sharedSpin.startDetails"
             :starting-stops="sharedSpin.startingStops"
             :preferences="sharedSpin.preferences"
+            @reroll="respin2()"
             @save-trip="saveTrip()"
           />
         </Transition>
@@ -409,32 +412,6 @@ async function copyCode() {
         :places="locResponse.data.value"
         @submit="spin2()"
         />
-        <SpinResults
-        v-if="isHost && submitted & (!result || result.errorMessage)"
-        :submitted="submitted"
-        :error-message="result?.errorMessage"
-        :chosen-stop="result?.chosenStop"
-        :stop-details="result?.stopDetails"
-        :start-details="result?.startDetails"
-        :starting-stops="result?.startingStops"
-        :preferences="preferences"
-        @reroll="respin2()"
-        @save-trip="saveTrip()"
-        />
-        <SpinResults
-          v-else-if="sharedSpin"
-          :submitted="true"
-          :chosen-stop="sharedSpin.chosenStop"
-          :stop-details="sharedSpin.stopDetails"
-          :start-details="sharedSpin.startDetails"
-          :starting-stops="sharedSpin.startingStops"
-          :preferences="sharedSpin.preferences"
-          @reroll="respin2()"
-          @save-trip="saveTrip()"
-        />
-        
-    
-
       </div>
     </div>
   </div>

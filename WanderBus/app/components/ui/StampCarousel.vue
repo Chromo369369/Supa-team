@@ -34,9 +34,12 @@
   - Rim text: the stop name on the top arc, "BUS 12 · 5 NOV" or "ON FOOT · 5 NOV" upright on the
     bottom arc; WANDERBUS joins the top line only for short names (see the rim layout note).
   - Notes are set in the app font (--font-ui) at 16px instead of the handwriting face.
+  Tier 2 (design.md §5, "Crumple delete"): a deleted trip's stamp crumples (SVG displacement
+  filter plus a squash and twist, about 450ms), then falls. This replaces the simple fall; under
+  reduced motion it only fades.
 
   Props
-    items   passport_entries rows (id, end_stop, entry_time, bus_taken, starting_stop,
+    items   passport_entries rows (id, end_stop, end_stop_code, entry_time, bus_taken, starting_stop,
             starting_location, time_taken, entry_notes, photo_url)
     label   accessible name of the carousel
   Slots (scoped, { item, index })
@@ -48,12 +51,13 @@
   is in the carousel (never from inside a form field) and Escape closes the details. Previous /
   Next are 44px buttons. Nothing plays on its own. Changes are announced through a polite status
   line. Pointer effects (tilt, glint) only follow a fine pointer. Under prefers-reduced-motion
-  there is no scatter, morph, deal-in, roll or fall: the stamps start in the cascade with the first
-  trip open, and every change is instant.
+  there is no scatter, morph, deal-in, roll or crumple: the stamps start in the cascade with the
+  first trip open, every change is instant, and a deleted stamp fades out.
 -->
 <script setup>
 import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, useId, watch } from 'vue'
 import { useMotionPrefs } from '~/composables/usePointer'
+import { bandFor } from '~/components/spin/TicketBelt.vue'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -62,6 +66,10 @@ const props = defineProps({
 
 const uid = `sc${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
 const { reducedMotion, canTrack } = useMotionPrefs()
+
+// gold foil stamps while the shop look perk-stamp-gold is equipped (useRewards)
+const rewards = useRewards()
+const gold = computed(() => rewards.isOn('perk-stamp-gold'))
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
 const lerp = (a, b, t) => a * (1 - t) + b * t
@@ -86,11 +94,74 @@ function hashOf(v) {
   return x >>> 0
 }
 
+/* ── filters: trip length, how, sort (kept in the URL query: ?len=&how=&sort=) ── */
+const route = useRoute()
+const router = useRouter()
+const LEN_OPTS = [
+  { value: 'all', label: 'All' },
+  { value: 'short', label: 'Short', range: '≤20 min' },
+  { value: 'medium', label: 'Medium', range: '21–40' },
+  { value: 'long', label: 'Long', range: '>40' }
+]
+const HOW_OPTS = [
+  { value: 'all', label: 'All' },
+  { value: 'bus', label: 'Bus' },
+  { value: 'walk', label: 'Walk' }
+]
+const SORT_OPTS = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'longest', label: 'Longest' }
+]
+const DEFAULTS = { len: 'all', how: 'all', sort: 'newest' }
+const OPTS = { len: LEN_OPTS, how: HOW_OPTS, sort: SORT_OPTS }
+const pick = (key) => {
+  const v = route.query[key]
+  return OPTS[key].some((o) => o.value === v) ? v : DEFAULTS[key]
+}
+const filters = computed(() => ({ len: pick('len'), how: pick('how'), sort: pick('sort') }))
+const filtersActive = computed(() => filters.value.len !== 'all' || filters.value.how !== 'all')
+function setFilter(key, value) {
+  if (filters.value[key] === value) return
+  const query = { ...route.query, [key]: value }
+  if (value === DEFAULTS[key]) delete query[key]
+  router.replace({ query })
+}
+function clearFilters() {
+  const query = { ...route.query }
+  delete query.len
+  delete query.how
+  router.replace({ query })
+}
+
+// Same rule as passport.vue: empty, null or 'Walk' means the trip was walked.
+const isBus = (t) => !!t?.bus_taken && t.bus_taken !== 'Walk'
+const timeOf = (t) => (t?.entry_time ? new Date(t.entry_time).getTime() : 0)
+const minutesOf = (t) => (t?.time_taken == null || t.time_taken === '' ? null : Number(t.time_taken))
+// The same bands as the spin belt (TicketBelt's bandFor). A trip with no time only shows under All.
+const bandOf = (t) => {
+  const m = minutesOf(t)
+  return m == null || Number.isNaN(m) ? null : bandFor(m)
+}
+const list = computed(() => {
+  const { len, how, sort } = filters.value
+  const out = props.items.filter((t) =>
+    (len === 'all' || bandOf(t) === len) &&
+    (how === 'all' || (how === 'bus') === isBus(t))
+  )
+  if (sort === 'oldest') out.sort((a, b) => timeOf(a) - timeOf(b))
+  else if (sort === 'longest') out.sort((a, b) => (minutesOf(b) ?? -1) - (minutesOf(a) ?? -1) || timeOf(b) - timeOf(a))
+  else out.sort((a, b) => timeOf(b) - timeOf(a))
+  return out
+})
+const total = computed(() => props.items.length)
+const noMatch = computed(() => total.value > 0 && list.value.length === 0)
+
 /* ── which trip is chosen (tracked by id, so a reload keeps your place) ── */
 const index = ref(0)
-const currentId = ref(props.items[0]?.id)
-const n = computed(() => props.items.length)
-const active = computed(() => props.items[index.value] ?? null)
+const currentId = ref(list.value[0]?.id)
+const n = computed(() => list.value.length)
+const active = computed(() => list.value[index.value] ?? null)
 const cardTransition = ref('sc-next')
 
 const rootEl = ref(null)
@@ -238,6 +309,7 @@ watch(reducedMotion, (on) => {
 onBeforeUnmount(() => {
   if (raf) cancelAnimationFrame(raf)
   if (scrollFrame) cancelAnimationFrame(scrollFrame)
+  if (crumpleRaf) cancelAnimationFrame(crumpleRaf)
   sizeObserver?.disconnect()
   noteObserver?.disconnect()
   window.removeEventListener('scroll', onScroll)
@@ -283,7 +355,7 @@ const scatter = computed(() => {
   const cw = aw / cols
   const ch = ah / rows
   const base = clamp((Math.min(cw, ch) * 0.9) / s.value, 0.3, 0.95)
-  return props.items.map((t, i) => {
+  return list.value.map((t, i) => {
     const r = rng(hashOf(t.id) + 7)
     const col = i % cols
     const row = Math.floor(i / cols)
@@ -298,7 +370,7 @@ const poses = computed(() => {
   const m = morph.value
   const z = zoomed.value ? 1 : 0
   const S = s.value
-  return props.items.map((_, i) => {
+  return list.value.map((_, i) => {
     const d = i - index.value
     const c = cascadePose(d, z)
     const a = scatter.value[i]
@@ -327,7 +399,7 @@ function go(i) {
   if (next === index.value) return
   cardTransition.value = next > index.value ? 'sc-next' : 'sc-prev'
   index.value = next
-  currentId.value = props.items[next]?.id
+  currentId.value = list.value[next]?.id
 }
 function select(i) {
   go(i)
@@ -343,14 +415,16 @@ function closeDetails() {
 }
 
 watch(
-  () => props.items.map((t) => t.id),
+  () => list.value.map((t) => t.id),
   (ids, old) => {
     const pos = ids.indexOf(currentId.value)
     if (pos >= 0) {
       index.value = pos
     } else {
-      // The chosen trip is gone (deleted after the confirm): its stamp falls and the next one opens.
-      if (old?.includes(currentId.value)) cardTransition.value = 'sc-fall'
+      // The chosen trip is gone. Deleted (no longer in the items prop): its details fall and the next
+      // one opens. Only filtered out: the details just slide along.
+      const deleted = old?.includes(currentId.value) && !props.items.some((t) => t.id === currentId.value)
+      if (deleted) cardTransition.value = 'sc-fall'
       index.value = Math.min(index.value, Math.max(ids.length - 1, 0))
     }
     currentId.value = ids[index.value]
@@ -363,8 +437,49 @@ function onCardAfterLeave() {
   if (!el || el === document.body) scene.value?.focus({ preventScroll: true })
 }
 
+/*
+  Crumple delete (design.md §5): a deleted trip's stamp crumples, then falls. The TransitionGroup
+  below is keyed by trip id, so when the page reloads its list only the removed stamp leaves (no
+  leave on the first load, since there is no `appear`). The squash, twist and fall are CSS keyframes
+  on .sc-deal (transform and opacity); the paper crinkle is one SVG filter (feTurbulence noise into
+  feDisplacementMap), whose displacement this hook ramps from 0 to full over CRUMPLE_MS. Under
+  reduced motion there is no filter and the stamp only fades.
+*/
+const CRUMPLE_MS = 450
+const CRUMPLE_PX = 30
+const crumpleMap = ref(null)
+let crumpleRaf = 0
+function onDiscBeforeLeave(el) {
+  // Filtered out, not deleted: the trip is still in the items prop, so it just goes, no crumple.
+  if (props.items.some((t) => String(t.id) === el.dataset?.tripId)) {
+    el.classList.add('is-filtered-out')
+    return
+  }
+  const deal = el.querySelector?.('.sc-deal')
+  const map = crumpleMap.value
+  if (reducedMotion.value || !deal || !map) return
+  if (crumpleRaf) cancelAnimationFrame(crumpleRaf)
+  map.setAttribute('scale', '0')
+  deal.style.filter = `url(#${uid}-crumple)`
+  const t0 = performance.now()
+  const tick = (t) => {
+    const p = clamp((t - t0) / CRUMPLE_MS, 0, 1)
+    map.setAttribute('scale', ((1 - (1 - p) ** 3) * CRUMPLE_PX).toFixed(1))
+    crumpleRaf = p < 1 ? requestAnimationFrame(tick) : 0
+  }
+  crumpleRaf = requestAnimationFrame(tick)
+}
+const discDuration = computed(() => ({ enter: 0, leave: reducedMotion.value ? 250 : 760 }))
+
 function onKey(e) {
   if (e.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return
+  if (e.key === 'Escape' && aroundOpen.value) {
+    // close the "which stop?" menu first, back on its toggle
+    e.preventDefault()
+    aroundOpen.value = false
+    nextTick(() => document.getElementById(`${uid}-around-toggle`)?.focus())
+    return
+  }
   if (e.key === 'Escape' && zoomed.value) {
     e.preventDefault()
     closeDetails()
@@ -422,8 +537,61 @@ function onPointerLeave() {
 }
 
 /* ── trip facts ── */
-const isBus = (t) => !!t?.bus_taken && t.bus_taken !== 'Walk'
 const stopName = (t) => t?.end_stop || 'Your destination'
+
+/* ── "See what's around <stop>": a link from the open stamp to its stop page (/stop/<code>) ──
+   New trips save end_stop_code. Older rows only have the end_stop name, so the first one that
+   needs it fetches /api/allBusStops once (LTA BusStops rows: BusStopCode, RoadName, Description),
+   and the name is matched on Description: one match links straight there, several open a small
+   menu of "<Description>, <RoadName>" links, none shows no link. */
+const normName = (s) => String(s ?? '').trim().toLowerCase()
+let stopIndexPromise = null   // resolves to Map(normalised Description -> [{ code, description, road }])
+function loadStopIndex() {
+  stopIndexPromise ??= $fetch('/api/allBusStops')
+    .then((rows) => {
+      const index = new Map()
+      for (const row of rows || []) {
+        const key = normName(row.Description)
+        if (!key) continue
+        if (!index.has(key)) index.set(key, [])
+        index.get(key).push({ code: row.BusStopCode, description: row.Description, road: row.RoadName })
+      }
+      return index
+    })
+    .catch((err) => {
+      stopIndexPromise = null   // let a later stamp try again
+      throw err
+    })
+  return stopIndexPromise
+}
+const stopMatches = reactive({})   // trip id -> the matching stops for an old row, once looked up
+async function matchOldStop(trip) {
+  const id = trip.id
+  if (id in stopMatches) return
+  stopMatches[id] = []
+  try {
+    const index = await loadStopIndex()
+    stopMatches[id] = index.get(normName(trip.end_stop)) || []
+  } catch (err) {
+    console.error('[passport] bus stop lookup failed:', err?.message || err)
+    delete stopMatches[id]
+  }
+}
+watch(
+  () => (showDetails.value ? active.value : null),
+  (trip) => {
+    if (trip && !trip.end_stop_code && trip.end_stop) matchOldStop(trip)
+  },
+  { immediate: true }
+)
+const aroundStops = computed(() => {
+  const t = active.value
+  if (!t) return []
+  if (t.end_stop_code) return [{ code: t.end_stop_code, description: t.end_stop, road: '' }]
+  return stopMatches[t.id] || []
+})
+const aroundOpen = ref(false)   // the "which stop?" menu when an old name matches several stops
+watch(() => active.value?.id, () => { aroundOpen.value = false })
 const dateOf = (t) => (t?.entry_time ? new Date(t.entry_time) : null)
 const formatDate = (t) =>
   dateOf(t)?.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) ?? ''
@@ -590,7 +758,7 @@ const StampFace = {
       return [
         // paper
         h('svg', { class: 'sc-paper', viewBox: '0 0 200 200', 'aria-hidden': 'true', focusable: 'false' }, [
-          h('path', { d: SCALLOP, style: { fill: 'var(--wb-surface)' } })
+          h('path', { d: SCALLOP, style: { fill: 'var(--sc-paper, var(--wb-surface))' } })
         ]),
         // centre art: the trip photo, otherwise the still mascot on its tint
         h('span', { class: 'sc-art' }, [
@@ -631,11 +799,73 @@ const StampFace = {
   <section
     ref="rootEl"
     class="stamp-carousel"
-    :class="{ 'is-reduced': reducedMotion, 'can-track': canTrack }"
+    :class="{ 'is-reduced': reducedMotion, 'can-track': canTrack, 'stamp-gold': gold }"
     aria-roledescription="carousel"
     :aria-label="label"
     @keydown="onKey"
   >
+    <!-- Filters: trip length, how, sort. Native radio groups, so arrow keys move within each one. -->
+    <div class="sc-filter-row" role="group" :aria-label="`Filter ${label.toLowerCase()}`">
+      <fieldset class="sc-seg">
+        <legend class="sc-seg-label">Trip length</legend>
+        <div class="sc-seg-opts">
+          <label v-for="o in LEN_OPTS" :key="o.value" class="sc-seg-opt" :class="{ 'is-on': filters.len === o.value }">
+            <input
+              type="radio"
+              class="sc-seg-input"
+              :name="`${uid}-len`"
+              :value="o.value"
+              :checked="filters.len === o.value"
+              @change="setFilter('len', o.value)"
+            >
+            <span v-if="o.value !== 'all'" class="sc-swatch" :class="`is-${o.value}`" aria-hidden="true"></span>
+            <span>{{ o.label }}</span>
+            <span v-if="o.range" class="sc-seg-range num">{{ o.range }}</span>
+          </label>
+        </div>
+      </fieldset>
+      <fieldset class="sc-seg">
+        <legend class="sc-seg-label">How</legend>
+        <div class="sc-seg-opts">
+          <label v-for="o in HOW_OPTS" :key="o.value" class="sc-seg-opt" :class="{ 'is-on': filters.how === o.value }">
+            <input
+              type="radio"
+              class="sc-seg-input"
+              :name="`${uid}-how`"
+              :value="o.value"
+              :checked="filters.how === o.value"
+              @change="setFilter('how', o.value)"
+            >
+            <span>{{ o.label }}</span>
+          </label>
+        </div>
+      </fieldset>
+      <fieldset class="sc-seg">
+        <legend class="sc-seg-label">Sort</legend>
+        <div class="sc-seg-opts">
+          <label v-for="o in SORT_OPTS" :key="o.value" class="sc-seg-opt" :class="{ 'is-on': filters.sort === o.value }">
+            <input
+              type="radio"
+              class="sc-seg-input"
+              :name="`${uid}-sort`"
+              :value="o.value"
+              :checked="filters.sort === o.value"
+              @change="setFilter('sort', o.value)"
+            >
+            <span>{{ o.label }}</span>
+          </label>
+        </div>
+      </fieldset>
+      <div class="sc-filter-meta">
+        <p class="sc-result-count" role="status">
+          <span class="num">{{ n }}</span> of <span class="num">{{ total }}</span> {{ total === 1 ? 'trip' : 'trips' }}
+        </p>
+        <button v-if="filtersActive && !noMatch" type="button" class="btn-wb-ghost btn-sm" @click="clearFilters">
+          Clear filters
+        </button>
+      </div>
+    </div>
+
     <div ref="track" class="sc-track" :class="{ 'is-scroll-morph': scrollMorphOn }">
       <div
         ref="stage"
@@ -656,12 +886,21 @@ const StampFace = {
           @pointermove="onPointerMove"
           @pointerleave="onPointerLeave"
         >
-          <TransitionGroup tag="div" class="sc-discs" name="disc" :css="!reducedMotion" :duration="420">
+          <!-- The crumple filter for a deleted stamp (its displacement is ramped by onDiscBeforeLeave) -->
+          <svg class="sc-filters" width="0" height="0" aria-hidden="true" focusable="false">
+            <filter :id="`${uid}-crumple`" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+              <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="7" result="noise" />
+              <feDisplacementMap ref="crumpleMap" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+          </svg>
+
+          <TransitionGroup tag="div" class="sc-discs" name="disc" :duration="discDuration" @before-leave="onDiscBeforeLeave">
             <button
-              v-for="(trip, i) in items"
+              v-for="(trip, i) in list"
               :key="trip.id"
               type="button"
               class="sc-disc"
+              :data-trip-id="trip.id"
               tabindex="-1"
               :aria-label="`Show trip ${i + 1} of ${n}: ${stopName(trip)}`"
               :aria-current="i === index ? 'true' : undefined"
@@ -690,8 +929,15 @@ const StampFace = {
             </button>
           </TransitionGroup>
 
+          <!-- Nothing left after the filters (the passport's own no-trips state lives in the page) -->
+          <div v-if="noMatch" class="sc-no-match">
+            <p class="sc-no-match-title">No trips match these filters</p>
+            <p class="sc-no-match-body">Try another trip length or way of getting there.</p>
+            <button type="button" class="btn-wb-primary btn-sm" @click="clearFilters">Clear filters</button>
+          </div>
+
           <!-- Controls -->
-          <div class="sc-controls">
+          <div v-if="n" class="sc-controls">
             <button
               v-if="canScatter"
               type="button"
@@ -752,6 +998,37 @@ const StampFace = {
               >
                 {{ expanded[active.id] ? 'Show less' : 'Read more' }}
               </button>
+            </div>
+
+            <!-- See what's around the end stop: straight to its stop page, or pick one when an old trip's name matches several -->
+            <NuxtLink
+              v-if="aroundStops.length === 1"
+              :to="`/stop/${aroundStops[0].code}`"
+              class="btn-wb-secondary btn-sm sc-around-link"
+            >
+              <i class="bi bi-geo-alt" aria-hidden="true"></i>
+              <span>See what’s around {{ stopName(active) }}</span>
+            </NuxtLink>
+            <div v-else-if="aroundStops.length > 1" class="sc-around">
+              <button
+                :id="`${uid}-around-toggle`"
+                type="button"
+                class="btn-wb-secondary btn-sm sc-around-link"
+                :aria-expanded="aroundOpen ? 'true' : 'false'"
+                :aria-controls="`${uid}-around-menu`"
+                @click="aroundOpen = !aroundOpen"
+              >
+                <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                <span>See what’s around {{ stopName(active) }}</span>
+                <i class="bi sc-around-chevron" :class="aroundOpen ? 'bi-chevron-up' : 'bi-chevron-down'" aria-hidden="true"></i>
+              </button>
+              <ul v-show="aroundOpen" :id="`${uid}-around-menu`" class="sc-around-menu" :aria-label="`Stops named ${stopName(active)}`">
+                <li v-for="stop in aroundStops" :key="stop.code">
+                  <NuxtLink :to="`/stop/${stop.code}`" class="sc-around-item">
+                    {{ stop.description }}<template v-if="stop.road">, {{ stop.road }}</template>
+                  </NuxtLink>
+                </li>
+              </ul>
             </div>
 
             <slot name="editor" :item="active" :index="index" />
@@ -943,6 +1220,28 @@ const StampFace = {
     transparent 360deg);
 }
 
+/* Gold foil (shop look perk-stamp-gold, .stamp-gold on the root): legendary-tint paper, a flat
+   legendary gold rim and the ink in amber-ink (6.2:1 on the tint), plus one still sheen in place of
+   the moving glint. */
+.stamp-gold .sc-disc {
+  --sc-paper: var(--wb-rarity-legendary-tint);
+  color: var(--wb-amber-ink);
+}
+.stamp-gold .sc-edge {
+  color: var(--wb-rarity-legendary);
+}
+.stamp-gold .sc-roll :deep(.sc-ink) {
+  color: var(--wb-amber-ink);
+  opacity: 1;
+}
+.stamp-gold .sc-sheen {
+  opacity: .5;
+  background: linear-gradient(135deg, /* taste-skill-ignore: a still foil sheen on the gold stamp look */
+    transparent 30%,
+    color-mix(in srgb, var(--wb-surface) 70%, transparent) 46%,
+    transparent 60%);
+}
+
 /* Stamp type, set inside the SVG */
 .stamp-carousel :deep(.ink-rim) {
   font-family: var(--font-ui);
@@ -959,9 +1258,161 @@ const StampFace = {
   to   { opacity: 0; transform: translateY(40px) rotate(6deg) scale(.9); }
 }
 
-/* a deleted trip's stamp falls out of the line; the others close the gap */
+/* A deleted trip's stamp crumples (about 450ms of the 760ms: squash, twist and the filter's
+   crinkle), then falls out of the line; the others close the gap. */
+@keyframes sc-crumple {
+  0%   { opacity: 1; transform: none; animation-timing-function: cubic-bezier(.3, 0, .4, 1); }
+  18%  { transform: scale(.94, .86) rotate(-5deg); animation-timing-function: cubic-bezier(.3, 0, .4, 1); }
+  38%  { transform: scale(.78, .84) rotate(6deg); animation-timing-function: cubic-bezier(.3, 0, .4, 1); }
+  59%  { opacity: 1; transform: scale(.6, .56) rotate(-9deg); animation-timing-function: cubic-bezier(.5, 0, .9, .6); }
+  100% { opacity: 0; transform: translateY(70px) rotate(18deg) scale(.5); }
+}
+@keyframes sc-fade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.sc-filters {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.disc-leave-active {
+  pointer-events: none;
+}
 .disc-leave-active .sc-deal {
-  animation: sc-fall var(--t-reveal) var(--ease) both;
+  animation: sc-crumple 760ms linear both;
+}
+
+/* ── Filter row, above the wall ── */
+.sc-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3) var(--sp-5);
+  margin-bottom: var(--sp-4);
+}
+.sc-seg {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.sc-seg-label {
+  float: none;
+  width: auto;
+  margin: 0 0 var(--sp-1);
+  padding: 0;
+  color: var(--wb-text-2);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  line-height: 1.4;
+}
+.sc-seg-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  border-radius: var(--r-pill);
+  background: var(--wb-surface-2);
+}
+.sc-seg-opt {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-pill);
+  color: var(--wb-ink);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--t-micro) var(--ease), color var(--t-micro) var(--ease);
+}
+.sc-seg-opt:hover {
+  background: var(--wb-surface);
+}
+.sc-seg-opt.is-on {
+  background: var(--wb-ink);
+  color: var(--wb-on-ink);
+}
+.sc-seg-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.sc-seg-opt:has(.sc-seg-input:focus-visible) {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
+}
+.sc-seg-range {
+  color: var(--wb-text-2);
+  font-weight: 400;
+}
+.sc-seg-opt.is-on .sc-seg-range {
+  color: var(--wb-on-ink-2);
+}
+.sc-swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.sc-swatch.is-short { background: var(--wb-green); }
+.sc-swatch.is-medium { background: var(--wb-amber); }
+.sc-swatch.is-long { background: var(--wb-ink); }
+/* the ink swatch keeps an outline so it still shows on the ink pill */
+.sc-seg-opt.is-on .sc-swatch.is-long { outline: 2px solid var(--wb-on-ink); outline-offset: -1px; }
+.sc-filter-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  margin-left: auto;
+}
+.sc-result-count {
+  margin: 0;
+  color: var(--wb-text-2);
+  font-size: var(--fs-small);
+}
+.sc-result-count .num {
+  color: var(--wb-ink);
+  font-weight: 600;
+}
+
+/* ── No trip matches the filters ── */
+.sc-no-match {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-5);
+  text-align: center;
+}
+.sc-no-match-title {
+  margin: 0;
+  color: var(--wb-ink);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+}
+.sc-no-match-body {
+  margin: 0 0 var(--sp-2);
+  color: var(--wb-text-2);
+}
+
+/* a stamp the filters took out leaves at once (only a real delete crumples) */
+.sc-disc.is-filtered-out {
+  display: none;
 }
 
 /* ── Controls, bottom right ── */
@@ -1087,6 +1538,59 @@ const StampFace = {
   margin-left: calc(var(--sp-3) * -1);
 }
 
+/* ── "See what's around <stop>" ── */
+.sc-around {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.sc-around-link {
+  align-self: flex-start;
+  max-width: 100%;
+  text-align: left;
+}
+.sc-around-link span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+.sc-around-chevron {
+  flex: none;
+}
+.sc-around-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  align-self: stretch;
+  margin: 0;
+  padding: var(--sp-1);
+  list-style: none;
+  border-radius: var(--r-control);
+  background: var(--wb-surface-2);
+}
+.sc-around-item {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: calc(var(--r-control) - var(--sp-1));
+  color: var(--wb-ink);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: background-color var(--t-micro) var(--ease);
+}
+.sc-around-item:hover {
+  background: var(--wb-surface);
+}
+.sc-around-item:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
+}
+
 /* ── Phones: the details sit below the zoomed stamp, in the stage's flow ── */
 @container (max-width: 639px) {
   .sc-stage {
@@ -1139,8 +1643,16 @@ const StampFace = {
 .is-reduced .sc-deal {
   animation: none;
 }
+/* a deleted stamp only fades */
+.is-reduced .disc-leave-active .sc-deal {
+  animation: sc-fade var(--t-ui) linear both;
+}
+.is-reduced .sc-seg-opt {
+  transition: none;
+}
 @media (prefers-reduced-motion: reduce) {
-  .sc-disc, .sc-roll, .sc-tilt { transition: none; }
+  .sc-disc, .sc-roll, .sc-tilt, .sc-seg-opt { transition: none; }
   .sc-deal { animation: none; }
+  .disc-leave-active .sc-deal { animation: sc-fade var(--t-ui) linear both; filter: none !important; }
 }
 </style>

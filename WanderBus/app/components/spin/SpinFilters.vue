@@ -8,6 +8,7 @@
 -->
 <script setup>
 import { categoryInfo } from '~/utils/spinCategories'
+import TimeDial from '~/components/spin/TimeDial.vue'
 
 const travelTime = defineModel('travelTime')
 const startingLocation = defineModel('startingLocation')
@@ -174,21 +175,21 @@ function submit() {
                         </div>
 
                         <div class="filter-group">
-                            <label class="filter-legend" for="travel-time">
-                                How long do you have? <span class="filter-value">up to <span class="num">{{ travelTime }}</span> min</span>
-                            </label>
-                            <input
+                            <label class="filter-legend" for="travel-time">How long do you have?</label>
+                            <TimeDial
                                 id="travel-time"
-                                v-model.number="travelTime"
-                                type="range"
-                                class="form-range"
+                                v-model="travelTime"
                                 :min="MIN_TIME"
                                 :max="MAX_TIME"
-                                step="5"
-                                :aria-valuetext="`Up to ${travelTime} minutes`"
-                                aria-describedby="travel-time-help"
-                            >
-                            <p id="travel-time-help" class="form-text m-0">Walking to the stop, waiting and the ride all count.</p>
+                                :step="5"
+                                describedby="travel-time-help"
+                            />
+                            <ul class="dial-legend" aria-hidden="true">
+                                <li><span class="dial-swatch dial-swatch--short"></span>Short <span class="num">&le; 20</span></li>
+                                <li><span class="dial-swatch dial-swatch--medium"></span>Medium <span class="num">21&ndash;40</span></li>
+                                <li><span class="dial-swatch dial-swatch--long"></span>Long <span class="num">&gt; 40</span></li>
+                            </ul>
+                            <p id="travel-time-help" class="form-text m-0">Drag the dial or use the arrow keys. Walking to the stop, waiting and the ride all count.</p>
                         </div>
 
                         <fieldset class="filter-group">
@@ -292,13 +293,6 @@ function submit() {
   color: var(--wb-ink);
 }
 
-.filter-value {
-  font-size: var(--fs-small);
-  font-weight: 500;
-  color: var(--wb-text-2);
-  white-space: nowrap;
-}
-
 .form-text {
   color: var(--wb-muted);
   font-size: var(--fs-small);
@@ -350,28 +344,34 @@ function submit() {
   outline-offset: -2px;
 }
 
-/* Range */
-.form-range::-webkit-slider-thumb {
-  background: var(--wb-green);
+/* Time dial legend: the same bands and colours as the ticket belt */
+.dial-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-1) 14px;
+  margin: var(--sp-3) 0 var(--sp-2);
+  padding: 0;
+  font-size: var(--fs-small);
+  color: var(--wb-text-2);
 }
 
-.form-range::-moz-range-thumb {
-  background: var(--wb-green);
+.dial-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.form-range:focus::-webkit-slider-thumb {
-  box-shadow:none; /* clears Bootstrap focus glow */
+.dial-swatch {
+  width: 14px;
+  height: 8px;
+  border-radius: 3px;
 }
 
-.form-range:focus::-moz-range-thumb {
-  box-shadow:none; /* clears Bootstrap focus glow */
-}
-
-.form-range:focus-visible {
-  outline: 3px solid var(--wb-green);
-  outline-offset: 4px;
-  border-radius: var(--r-pill);
-}
+.dial-swatch--short { background: var(--wb-green); }
+.dial-swatch--medium { background: var(--wb-amber); }
+.dial-swatch--long { background: var(--wb-ink); }
 
 /* Category chips: tone at rest; green tint, green text and a check when selected (design.md §4.3) */
 .chips {

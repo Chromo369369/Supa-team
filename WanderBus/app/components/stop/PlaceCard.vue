@@ -1,4 +1,6 @@
 <script setup>
+import PhotoViewer from '~/components/ui/PhotoViewer.vue'
+
 const props = defineProps({
     place: Object,
     stop: Object,
@@ -17,6 +19,25 @@ function onFilePicked(event) {
     event.target.value = ''   // so picking the same file again still triggers change
 }
 
+// the cover is the Pioneer photo (the first one ever posted) when there is one, otherwise the newest
+const coverIndex = computed(() => {
+    const pioneer = props.photos.findIndex(photo => photo.is_pioneer)
+    return pioneer === -1 ? 0 : pioneer
+})
+const cover = computed(() => props.photos[coverIndex.value])
+
+// the gallery gets every photo of this place, newest first (same order as the prop), and opens on the cover
+const viewer = ref(null)
+const galleryPhotos = computed(() => props.photos.map((photo, i) => ({
+    url: photo.url,
+    alt: `Photo ${i + 1} of ${props.place.name}`,
+    isPioneer: photo.is_pioneer,
+    createdAt: photo.created_at
+})))
+const galleryLabel = computed(() => props.photos.length > 1
+    ? `See all ${props.photos.length} photos of ${props.place.name}`
+    : `See the photo of ${props.place.name}`)
+
 const walkLink = computed(() =>
     `https://www.google.com/maps/dir/?api=1&origin=${props.stop.lat},${props.stop.lon}&destination=${props.place.lat},${props.place.lon}&travelmode=walking`
 )
@@ -25,12 +46,13 @@ const walkLink = computed(() =>
 <template>
     <!-- the card itself isn't clickable: the name is the button that picks the pin, the other controls sit beside it -->
     <article :id="`place-${place.id}`" class="place-card" :class="{ 'is-selected': selected }">
-        <div v-if="photos.length" class="place-photo has-photo">
-            <img :src="photos[0].url" :alt="`Photo of ${place.name}`" width="120" height="120" loading="lazy" decoding="async" />
-            <span v-if="photos.length > 1" class="photo-count num">
-                <i class="bi bi-images" aria-hidden="true"></i> {{ photos.length }}<span class="visually-hidden"> photos</span>
+        <!-- the photo and its count are one button that opens the gallery -->
+        <button v-if="photos.length" type="button" class="place-photo has-photo" :aria-label="galleryLabel" @click="viewer.open(coverIndex)">
+            <img :src="cover.url" :alt="`${cover.is_pioneer ? 'Pioneer photo' : 'Photo'} of ${place.name}`" width="120" height="120" loading="lazy" decoding="async" />
+            <span v-if="photos.length > 1" class="photo-count num" aria-hidden="true">
+                <i class="bi bi-images"></i> {{ photos.length }}
             </span>
-        </div>
+        </button>
         <div v-else class="place-photo undiscovered">
             <i class="bi bi-camera" aria-hidden="true"></i>
             <span class="place-photo-label">Be the first to add a photo</span>
@@ -68,6 +90,8 @@ const walkLink = computed(() =>
             </div>
             <input ref="fileInput" type="file" accept="image/*" class="d-none" tabindex="-1" aria-hidden="true" @change="onFilePicked" />
         </div>
+
+        <PhotoViewer v-if="photos.length" ref="viewer" :photos="galleryPhotos" :title="`Photos of ${place.name}`" />
     </article>
 </template>
 
@@ -118,7 +142,29 @@ const walkLink = computed(() =>
 
 .place-photo.has-photo {
   position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
   background: var(--wb-line);
+  cursor: zoom-in;
+}
+
+.place-photo.has-photo:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
+}
+
+.place-photo.has-photo img {
+  transition: transform var(--t-ui) var(--ease);
+}
+
+.place-photo.has-photo:hover img {
+  transform: scale(1.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .place-photo.has-photo img { transition: none; }
+  .place-photo.has-photo:hover img { transform: none; }
 }
 
 .place-photo.has-photo img {
