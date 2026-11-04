@@ -2,7 +2,10 @@
   <div class="container-fluid py-4 px-md-5 bg-light min-vh-100">
     <div class="row justify-content-center">
       <div class="col-lg-8 col-md-10">
-        <h2 class="fw-bold mb-4">Your Digital Passport Entries</h2>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+          <h2 class="fw-bold mb-0">Your Digital Passport Entries</h2>
+          <span v-if="credits !== null" class="badge rounded-pill credits-pill">🏅 {{ credits }} Pioneer credits</span>
+        </div>
 
         <div class="d-flex flex-column gap-3">
 
@@ -245,8 +248,20 @@ const loadTrips = async () => {
   }
 }
 
+// Pioneer credits (user_rewards only has a row once you've earned some)
+const credits = ref(null)
+const loadCredits = async () => {
+  const { data, error } = await $supabase.from('user_rewards').select('credits').maybeSingle()
+  if (error) {
+    console.error('Error fetching credits:', error.message)
+    return
+  }
+  credits.value = data?.credits ?? 0
+}
+
 onMounted(() => {
   loadTrips()
+  loadCredits()
 })
 
 const toggleEdit = (trip) => {
@@ -622,5 +637,12 @@ const clearPhoto = () => {
 .expand-leave-to {
   opacity: 0;
   max-height: 0;
+}
+
+.credits-pill {
+  background: #fdf3d7;
+  color: #7a5200;
+  font-size: 0.95rem;
+  padding: 8px 14px;
 }
 </style>

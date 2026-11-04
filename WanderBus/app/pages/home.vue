@@ -28,37 +28,6 @@ const startDetails = ref('')
 const errorMessage = ref('')
 const possibleStops = ref({})
 
-// AUTOMATIC CREATE: Saves directly to passport_entries in Supabase
-async function autoSavePassportEntry() {
-    try {
-        if (!chosenStop.value) return
-
-        const { data: { user } } = await $supabase.auth.getUser()
-
-        const payload = {
-            user_id: user?.id || null,
-            starting_location: selectedPlace.value?.ADDRESS || startingLocation.value || 'Selected Start Location',
-            starting_stop: startDetails.value?.Description || chosenStop.value?.chosen?.boardAt || 'Boarding Stop',
-            end_stop: stopDetails.value?.Description || chosenStop.value?.destination || 'Alighting Stop',
-            bus_taken: chosenStop.value?.chosen?.bus ? String(chosenStop.value.chosen.bus) : 'Walk',
-            time_taken: Math.ceil(chosenStop.value?.chosen?.totalTime || 0),
-            entry_time: new Date().toISOString()
-        }
-
-        const { error } = await $supabase
-            .from('passport_entries')
-            .insert(payload)
-
-        if (error) {
-            console.error('[Passport Auto-Save Error]:', error.message)
-            return
-        }
-
-        console.log('Successfully auto-saved spin to passport_entries!')
-    } catch (e) {
-        console.error('[Passport Auto-Save Exception]:', e)
-    }
-}
 
 async function reroll() {
     chosenStop.value = chooseStop(possibleStops.value)
@@ -69,7 +38,7 @@ async function reroll() {
     await autoSavePassportEntry()
 }
 
-async function update() {
+async function update(){
     submitted.value = true
     errorMessage.value = ''
     chosenStop.value = ''
@@ -81,8 +50,11 @@ async function update() {
         startingStops.value = starts
         let now = Date.now() / 60000
         let arrivals = {}
-        for (let stopCode of Object.keys(starts)) {
-            let busArrivals = await $fetch('/api/busArrivals', { query: { value: stopCode } })
+        // ask LTA for every starting stop at the same time instead of one by one (40 stops took ~10s in a row)
+        let stopCodes = Object.keys(starts)
+        let allArrivals = await Promise.all(stopCodes.map(stopCode => $fetch('/api/busArrivals', { query: { value: stopCode } })))
+        for (let [index, stopCode] of stopCodes.entries()) {
+            let busArrivals = allArrivals[index]
             arrivals[stopCode] = {}
             let timeAtStop = now + starts[stopCode]
             for (let bus of busArrivals.Services || []) {
@@ -106,13 +78,31 @@ async function update() {
         stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
         startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
 
-        // Auto-save spin immediately upon successful generation
-        await autoSavePassportEntry()
 
     } catch (e) {
         errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
     }
 }
+async function saveTrip(){
+        try{
+            const {data, error} = await $supabase.from('passport_entries').insert({
+                starting_stop: startDetails.value.Description,
+                end_stop: stopDetails.value.Description,
+                time_taken: Math.ceil(chosenStop.value.chosen.totalTime),
+                bus_taken:chosenStop.value.chosen.bus,
+                starting_location: selectedPlace.value.ADDRESS
+            })
+            if(error){
+                alert(`Could not save your trip: ${error.message}`)
+                return
+            }
+            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
+            
+                
+        }catch(e){
+            console.log(e)
+        }
+    }
 </script>
 
 <template>
@@ -140,7 +130,12 @@ async function update() {
                 :stop-details="stopDetails"
                 :start-details="startDetails"
                 :starting-stops="startingStops"
+                :preferences="preferences"
                 @reroll="reroll()"
+            />
+            <SpinSubmit
+                :submitted="submitted && !!chosenStop"
+                @saveTrip="saveTrip()"
             />
         </div>
     </section>

@@ -8,9 +8,7 @@ export default defineNuxtConfig({
     onemapToken:'',
     public: {
       supabaseUrl: '',
-      supabaseKey: '',
-      ltaKey: '',        // Maps to NUXT_PUBLIC_LTA_KEY in your .env
-      onemapToken: ''    // Maps to NUXT_PUBLIC_ONEMAP_TOKEN in your .env
+      supabaseKey: ''
     }
   },
 })

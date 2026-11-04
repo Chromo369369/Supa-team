@@ -1,5 +1,109 @@
 <script setup>
-defineEmits(['leave'])
+import { ref, onMounted } from 'vue'
+
+const emit = defineEmits(['leave'])
+
+const props = defineProps({
+  group: {
+    type: Object,
+    required: true
+  }
+})
+
+const { $supabase } = useNuxtApp()
+const hostName = ref('Host')
+const isHost = ref(false)
+const groupMembers = ref([])
+const loadingMembers = ref(true)
+const membersError = ref('')
+const currentUserId = ref('')
+const leavingGroup = ref(false)
+
+
+onMounted(async () => {
+  try {
+    const { data: userData, error: userError } = await $supabase.auth.getUser()
+    if (userError) throw userError
+
+    currentUserId.value = userData.user.id
+
+    const { data: groupDetails, error: groupError } = await $supabase
+      .from('groups')
+      .select('host_id')
+      .eq('group_code', props.group.group_code)
+      .maybeSingle()
+
+    if (groupError) throw groupError
+    if (!groupDetails) throw new Error('Group not found')
+
+    isHost.value = userData.user.id == groupDetails.host_id
+
+    const { data: members, error: memberError } = await $supabase
+      .from('group_members')
+      .select('user_id, display_name')
+      .eq('group_code', props.group.group_code)
+
+    if (memberError) throw memberError
+
+    const allMembers = members || []
+    let host = null
+
+    for (const member of allMembers) {
+      if (member.user_id == groupDetails.host_id) {
+        host = member
+        break
+      }
+    }
+
+    hostName.value = host.display_name
+    groupMembers.value = allMembers.filter(
+      member => member.user_id != groupDetails.host_id
+    )
+  } catch {
+    membersError.value = 'Unable to load group members'
+  } finally {
+    loadingMembers.value = false
+  }
+})
+
+async function leaveGroup() {
+  if (leavingGroup.value) return
+
+  leavingGroup.value = true
+
+  try {
+    if (isHost.value) {
+      const { error: membersDeleteError } = await $supabase
+        .from('group_members')
+        .delete()
+        .eq('group_code', props.group.group_code)
+
+      if (membersDeleteError) throw membersDeleteError
+
+      const { error: groupDeleteError } = await $supabase
+        .from('groups')
+        .delete()
+        .eq('group_code', props.group.group_code)
+
+      if (groupDeleteError) throw groupDeleteError
+
+    } else {
+      const { error: memberDeleteError } = await $supabase
+        .from('group_members')
+        .delete()
+        .eq('group_code', props.group.group_code)
+        .eq('user_id', currentUserId.value)
+
+      if (memberDeleteError) throw memberDeleteError
+    }
+
+    emit('leave')
+  } catch (error) {
+    alert(error.message)
+  } finally {
+    leavingGroup.value = false
+  }
+}
 </script>
 
 <template>
@@ -8,21 +112,16 @@ defineEmits(['leave'])
       <div class="lobby-card p-4 p-sm-5">
 
         <h2>Everyone aboard?</h2>
-        <p>Invite your friends along for your next side quest.</p>
+        <p>Wait here while everyone joins the group.</p>
 
         <span class="code-label">Group code</span>
-        <div class="group-code">WB2026</div>
+        <div class="group-code">{{ group.group_code }}</div>
 
         <button
           type="button"
           class="lobby-button dark-button"
-        >
-          Copy group code
-        </button>
-
-        <button
-          type="button"
-          class="leave-button"
+          :disabled="leavingGroup || loadingMembers"
+          @click="leaveGroup"
         >
           Leave group
         </button>
@@ -39,20 +138,32 @@ defineEmits(['leave'])
 
         <div class="member-row">
           <div class="member-details">
-            <strong>Host Name</strong>
+            <strong>{{ hostName }}</strong>
             <span>Ready to explore</span>
           </div>
 
-          <span class="host-badge">Host</span>
         </div>
 
         <div class="waiting-box">
-          <span>(frined list)</span>
+          <span v-if="loadingMembers">Loading group members...</span>
+          <span v-else-if="membersError">{{ membersError }}</span>
+          <span v-else-if="groupMembers.length == 0">
+            Waiting for friends to join.
+          </span>
+          <template v-else>
+            <span
+              v-for="member in groupMembers"
+              :key="member.user_id"
+            >
+              {{ member.display_name }}
+            </span>
+          </template>
         </div>
 
         <button
           type="button"
           class="lobby-button green-button"
+          :disabled="!isHost"
         >
           Ready? Let's Spin!
         </button>
@@ -100,7 +211,7 @@ defineEmits(['leave'])
   background: #f6f8fb;
   color: #141a33;
   text-align: center;
-  font-size: 1.8rem;
+  font-size: 30px;
   font-weight: 800;
   letter-spacing: 4px;
 }
@@ -127,16 +238,6 @@ defineEmits(['leave'])
   cursor: not-allowed;
 }
 
-.leave-button {
-  align-self: center;
-  margin-top: auto;
-  padding: 8px;
-  border: none;
-  background: transparent;
-  color: #4a5068;
-  text-decoration: underline;
-}
-
 .lobby-heading {
   display: flex;
   justify-content: space-between;
@@ -148,15 +249,6 @@ defineEmits(['leave'])
 
 .lobby-heading h2 {
   margin: 0;
-}
-
-.host-badge {
-  padding: 6px 12px;
-  border-radius: 50px;
-  background: #eaf5ef;
-  color: #0b7a4b;
-  font-size: 0.85rem;
-  font-weight: 600;
 }
 
 .member-row {
