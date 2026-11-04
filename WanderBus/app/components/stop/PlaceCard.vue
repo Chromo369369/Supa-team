@@ -13,7 +13,7 @@ const style = computed(() => placeStyle(props.place.category))
 const fileInput = ref(null)
 
 function onFilePicked(event) {
-    emit('upload', props.place, event.target.files[0])
+    if (event.target.files[0]) emit('upload', props.place, event.target.files[0])
     event.target.value = ''   // so picking the same file again still triggers change
 }
 
@@ -23,31 +23,50 @@ const walkLink = computed(() =>
 </script>
 
 <template>
-    <article :id="`place-${place.id}`" class="place-card" :class="{ 'is-selected': selected }" @click="$emit('select', place.id)">
+    <!-- the card itself isn't clickable: the name is the button that picks the pin, the other controls sit beside it -->
+    <article :id="`place-${place.id}`" class="place-card" :class="{ 'is-selected': selected }">
         <div v-if="photos.length" class="place-photo has-photo">
-            <img :src="photos[0].url" :alt="`Photo of ${place.name}`" loading="lazy" />
-            <span v-if="photos.length > 1" class="photo-count">📷 {{ photos.length }}</span>
+            <img :src="photos[0].url" :alt="`Photo of ${place.name}`" width="120" height="120" loading="lazy" decoding="async" />
+            <span v-if="photos.length > 1" class="photo-count num">
+                <i class="bi bi-images" aria-hidden="true"></i> {{ photos.length }}<span class="visually-hidden"> photos</span>
+            </span>
         </div>
-        <div v-else class="place-photo undiscovered" :style="{ background: style.tint, color: style.colour }">
-            <span class="place-photo-icon">{{ style.icon }}</span>
-            <span class="place-photo-label">Undiscovered</span>
+        <div v-else class="place-photo undiscovered">
+            <i class="bi bi-camera" aria-hidden="true"></i>
+            <span class="place-photo-label">Be the first to add a photo</span>
         </div>
 
         <div class="place-body">
-            <span class="place-badge" :style="{ background: style.tint, color: style.colour }">{{ style.label }}</span>
-            <span v-if="place.preferred" class="place-badge pick-badge">⭐ Your pick</span>
-            <h3 class="place-name">{{ place.name }}</h3>
+            <div class="place-badges">
+                <span class="place-badge" :style="{ background: style.tint, color: style.text }">
+                    <i class="bi" :class="style.icon" aria-hidden="true"></i> {{ style.label }}
+                </span>
+                <span v-if="place.preferred" class="place-badge pick-badge"><i class="bi bi-star-fill" aria-hidden="true"></i> Your pick</span>
+            </div>
+            <h3 class="place-name">
+                <button type="button" class="title-btn" :aria-current="selected ? 'true' : undefined" @click="emit('select', place.id)">
+                    {{ place.name }}
+                </button>
+            </h3>
             <p class="place-subtype">{{ place.subtype }}</p>
-            <p class="place-walk">🚶 <strong>{{ place.walkMin }} min walk</strong> · {{ place.distanceM }} m from the stop</p>
-            <p v-if="!photos.length" class="place-pioneer-note">📷 No photos yet. The first one earns Pioneer credit (+100).</p>
+            <p class="place-walk">
+                <i class="bi bi-person-walking" aria-hidden="true"></i>
+                <strong class="num">{{ place.walkMin }} min walk</strong> · <span class="num">{{ place.distanceM }} m</span> from the stop
+            </p>
+            <p v-if="!photos.length" class="place-pioneer-note">
+                <i class="bi bi-award-fill" aria-hidden="true"></i> Post the first photo to become this place’s Pioneer (<span class="num">+100</span> credits).
+            </p>
 
             <div class="place-actions">
-                <button type="button" class="btn-photo" :class="{ pioneer: !photos.length }" :disabled="uploading" @click.stop="fileInput.click()">
-                    {{ uploading ? 'Uploading...' : photos.length ? '📷 Add a photo' : '📷 Be the Pioneer' }}
+                <button type="button" class="btn-wb btn-wb-secondary btn-sm" :disabled="uploading" :aria-busy="uploading ? 'true' : undefined" @click="fileInput.click()">
+                    <i v-if="!uploading" class="bi bi-camera" aria-hidden="true"></i>
+                    {{ uploading ? 'Uploading…' : photos.length ? 'Add a photo' : 'Add the first photo' }}
                 </button>
-                <a :href="walkLink" target="_blank" rel="noopener noreferrer" class="btn-walk" @click.stop>Walk there</a>
+                <a :href="walkLink" target="_blank" rel="noopener noreferrer" class="btn-wb-ghost btn-sm">
+                    Walk there <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="visually-hidden"> (opens Google Maps in a new tab)</span>
+                </a>
             </div>
-            <input ref="fileInput" type="file" accept="image/*" class="d-none" @click.stop @change="onFilePicked" />
+            <input ref="fileInput" type="file" accept="image/*" class="d-none" tabindex="-1" aria-hidden="true" @change="onFilePicked" />
         </div>
     </article>
 </template>
@@ -56,161 +75,168 @@ const walkLink = computed(() =>
 .place-card {
   flex-shrink: 0;   /* the list is a fixed-height flex column, without this the cards get squashed into lines */
   display: grid;
-  grid-template-columns: 120px 1fr;
-  background: #fff;
-  border: 1px solid #e3e5ec;
-  border-radius: 14px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.place-card:hover {
-  border-color: #c9ccd6;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-4);
+  background: var(--wb-surface-2);
+  border-radius: var(--r-card);
+  padding: var(--sp-3);
 }
 
 .place-card.is-selected {
-  border-color: #f5a623;
-  box-shadow: 0 0 0 2px #f5a623;
+  outline: 3px solid var(--wb-green);
+  outline-offset: 0;
 }
 
 .place-photo {
+  aspect-ratio: 1;
+  width: 100%;
+  border-radius: var(--r-control);
+  overflow: hidden;
+}
+
+.place-photo.undiscovered {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  background-image: radial-gradient(rgba(20, 26, 51, 0.08) 1px, transparent 1px) !important;
-  background-size: 12px 12px !important;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  background: var(--wb-surface);
+  color: var(--wb-text-2);
+  text-align: center;
 }
 
-.place-photo-icon {
-  font-size: 1.6rem;
+.place-photo.undiscovered .bi {
+  font-size: 24px;
 }
 
 .place-photo-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.place-body {
-  padding: 14px 16px;
-}
-
-.place-badge {
-  display: inline-block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 50px;
-  padding: 2px 10px;
-}
-
-.pick-badge {
-  margin-left: 6px;
-  background: #fdf3d7;
-  color: #7a5200;
-}
-
-.place-name {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #141a33;
-  margin: 8px 0 2px;
-}
-
-.place-subtype {
-  font-size: 0.85rem;
-  color: #6b7085;
-  margin-bottom: 8px;
-}
-
-.place-walk {
-  font-size: 0.85rem;
-  color: #4a5068;
-  margin-bottom: 10px;
-}
-
-.btn-walk {
-  display: inline-block;
-  background: #fff;
-  border: 1px solid #c9ccd6;
-  color: #141a33;
-  border-radius: 50px;
-  padding: 5px 14px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.btn-walk:hover {
-  background: #f1f2f6;
+  font-size: var(--fs-meta);
+  line-height: 1.3;
 }
 
 .place-photo.has-photo {
   position: relative;
-  padding: 0;
-  background: #e3e5ec !important;
+  background: var(--wb-line);
 }
 
 .place-photo.has-photo img {
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 150px;
   object-fit: cover;
 }
 
 .photo-count {
   position: absolute;
-  bottom: 6px;
-  left: 6px;
-  background: rgba(20, 26, 51, 0.75);
-  color: #fff;
-  border-radius: 50px;
-  padding: 1px 8px;
-  font-size: 0.75rem;
+  bottom: var(--sp-1);
+  left: var(--sp-1);
+  background: color-mix(in srgb, var(--wb-ink) 80%, transparent);
+  color: var(--wb-on-ink);
+  border-radius: var(--r-pill);
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-meta);
+}
+
+.place-body {
+  min-width: 0;
+  padding: var(--sp-1) var(--sp-1) var(--sp-1) 0;
+}
+
+.place-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.place-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  border-radius: var(--r-pill);
+  padding: 2px 10px;
+}
+
+.pick-badge {
+  background: var(--wb-amber-tint);
+  color: var(--wb-amber-ink);
+}
+
+.place-name {
+  font-family: var(--font-ui);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  line-height: 1.25;
+  margin: var(--sp-2) 0 var(--sp-1);
+}
+
+/* the name is the button that picks the pin on the map */
+.title-btn {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sp-1) 0;
+  background: none;
+  border: none;
+  border-radius: var(--r-control);
+  color: var(--wb-ink);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.title-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.title-btn:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
+}
+
+.place-subtype {
+  font-size: var(--fs-small);
+  color: var(--wb-text-2);
+  margin: 0 0 var(--sp-2);
+}
+
+.place-walk {
+  font-size: var(--fs-small);
+  color: var(--wb-text-2);
+  margin: 0 0 var(--sp-3);
+}
+
+.place-walk strong {
+  font-weight: 600;
+  color: var(--wb-ink);
 }
 
 .place-pioneer-note {
-  font-size: 0.8rem;
-  color: #7a5200;
-  margin-bottom: 10px;
+  font-size: var(--fs-small);
+  color: var(--wb-amber-ink);
+  margin: 0 0 var(--sp-3);
 }
 
 .place-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
-.btn-photo {
-  background: #fff;
-  border: 1px solid #c9ccd6;
-  color: #141a33;
-  border-radius: 50px;
-  padding: 5px 14px;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.btn-photo.pioneer {
-  background: #f5a623;
-  border-color: #f5a623;
-}
-
-.btn-photo:hover:not(:disabled) {
-  filter: brightness(0.95);
-}
-
-.btn-photo:disabled {
-  opacity: 0.6;
+/* the ghost button's hover tone is the card's own tone, so step to the surface instead */
+.place-actions .btn-wb-ghost:hover {
+  background: var(--wb-surface);
 }
 
 @media (max-width: 575.98px) {
   .place-card {
-    grid-template-columns: 88px 1fr;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: var(--sp-3);
   }
 }
 </style>

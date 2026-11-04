@@ -1,208 +1,156 @@
 <template>
-  <div class="container-fluid py-4 px-md-5 bg-light min-vh-100">
-    <div class="row justify-content-center">
+  <div class="passport-page">
+    <div class="row justify-content-center g-0">
       <div class="col-lg-8 col-md-10">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-          <h2 class="fw-bold mb-0">Your Digital Passport Entries</h2>
-          <span v-if="credits !== null" class="badge rounded-pill credits-pill">🏅 {{ credits }} Pioneer credits</span>
-        </div>
+        <header class="passport-head">
+          <h1 class="passport-title">Your passport</h1>
+          <div class="passport-meta">
+            <span v-if="!loading && !loadError" class="trip-count">
+              <span class="num">{{ savedTrips.length }}</span> {{ savedTrips.length === 1 ? 'trip' : 'trips' }}
+            </span>
+            <span v-if="credits !== null" class="credits-pill">
+              <i class="bi bi-trophy" aria-hidden="true"></i>
+              <span><span class="num">{{ credits }}</span> Pioneer credits</span>
+            </span>
+          </div>
+        </header>
 
-        <div class="d-flex flex-column gap-3">
+        <div class="d-flex flex-column gap-4">
 
-          <!-- Loading state -->
-          <div v-if="loading" class="text-center p-5 bg-white rounded-4 shadow-sm">
-            <p class="mb-0 text-muted">Loading your passport entries...</p>
+          <!-- Loading state (a reload after save/delete keeps the carousel on screen) -->
+          <div v-if="loading && !savedTrips.length" class="state-block" role="status">
+            <p class="mb-0">Loading your passport…</p>
           </div>
 
           <!-- Load error (CHANGED: previously only logged to the console) -->
-          <div v-else-if="loadError" class="alert alert-danger mb-0">
-            Could not load your entries: {{ loadError }}
+          <div v-else-if="loadError" class="state-block state-error" role="alert">
+            <p class="mb-0">Couldn’t load your trips: {{ loadError }}</p>
+            <button type="button" class="btn-wb-secondary btn-sm" @click="loadTrips">
+              <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+              Try again
+            </button>
           </div>
 
-          <!-- Empty state -->
-          <div
-            v-else-if="savedTrips.length === 0"
-            class="text-center text-muted p-5 bg-white rounded-4 shadow-sm"
-          >
-            <p class="mb-0">No trips logged yet. Spin a side quest on Home to add one!</p>
+          <!-- Empty state: the sleepy mascot waits at the stop -->
+          <div v-else-if="!loading && savedTrips.length === 0" class="state-block state-empty">
+            <WanderMascot mood="sleepy" :size="128" />
+            <div class="empty-board">
+              <LedBoard line1="NO TRIPS YET" badge="" label="No trips yet" />
+            </div>
+            <p class="mb-0">Your first stamp is one spin away.</p>
+            <NuxtLink to="/home" class="btn-wb-primary">Spin a trip</NuxtLink>
           </div>
 
-          <!-- Log cards -->
-          <div
-            v-for="trip in savedTrips"
-            :key="trip.id"
-            class="card shadow-sm border-0 rounded-4 overflow-hidden"
-          >
-            <div class="row g-0">
-              <!-- Photo Display -->
-              <div v-if="hasPhoto(trip)" class="col-sm-4 photo-col">
-                <img
-                  :src="trip.photo_url"
-                  class="trip-photo"
-                  alt="Trip Photo"
-                  loading="lazy"
-                  @error="failedPhotos[trip.id] = true"
-                />
-              </div>
-
-              <!-- Content -->
-              <div :class="hasPhoto(trip) ? 'col-sm-8' : 'col-12'">
-                <div class="card-body p-4 d-flex flex-column h-100">
-
-                  <!-- Top row: bus badge + date (CHANGED: uses isBus) -->
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <span class="badge bg-teal rounded-pill px-3 py-2">
-                      {{ isBus(trip) ? `Bus ${trip.bus_taken}` : 'Walk' }}
-                    </span>
-                    <span class="text-muted small">{{ formatDate(trip.entry_time) }}</span>
-                  </div>
-
-                  <!-- CHANGED: Journey timeline (replaces the paragraph) -->
-                  <div class="journey mb-3">
-                    <div class="journey-step">
-                      <span class="journey-dot">📍</span>
-                      <div>
-                        <div class="journey-label">Started from</div>
-                        <div class="journey-value">{{ trip.starting_location || 'Your starting point' }}</div>
-                      </div>
-                    </div>
-
-                    <template v-if="isBus(trip)">
-                      <div class="journey-step">
-                        <span class="journey-dot">🚶</span>
-                        <div>
-                          <div class="journey-label">Walked to</div>
-                          <div class="journey-value">{{ trip.starting_stop || 'the bus stop' }}</div>
-                        </div>
-                      </div>
-
-                      <div class="journey-step">
-                        <span class="journey-dot bus">🚌</span>
-                        <div>
-                          <div class="journey-label">Took bus</div>
-                          <div class="journey-value"><span class="bus-pill">{{ trip.bus_taken }}</span></div>
-                        </div>
-                      </div>
-                    </template>
-
-                    <div class="journey-step">
-                      <span class="journey-dot end">🏁</span>
-                      <div>
-                        <div class="journey-label">{{ isBus(trip) ? 'Arrived at' : 'Walked to' }}</div>
-                        <div class="journey-value">{{ trip.end_stop || 'Your destination' }}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- CHANGED: start -> estimated arrival strip (replaces the clock chips) -->
-                  <div v-if="trip.entry_time" class="time-strip mb-3">
-                    <div>
-                      <div class="journey-label">Started</div>
-                      <div class="time-big">{{ formatTime(trip.entry_time) }}</div>
-                    </div>
-
-                    <div class="time-mid">
-                      <span class="time-line"></span>
-                      <span class="chip">{{ formatDuration(trip.time_taken) }}</span>
-                      <span class="time-line"></span>
-                    </div>
-
-                    <div class="text-end">
-                      <div class="journey-label">Est. arrival</div>
-                      <div class="time-big">{{ arrivalTime(trip) }}</div>
-                    </div>
-                  </div>
-
-                  <!-- Display User Notes/Memories -->
-                  <div v-if="trip.entry_notes" class="mb-3">
-                    <h6 class="fw-semibold text-secondary mb-1">Notes:</h6>
-                    <p class="card-text text-secondary bg-white p-2 rounded border-sm">{{ trip.entry_notes }}</p>
-                  </div>
-
-                  <!-- Expandable Edit Form -->
-                  <transition name="expand">
+          <!-- Memory cards: one stamped disc per trip (§4.5) -->
+          <StampCarousel v-if="savedTrips.length" :items="savedTrips" label="Your trips">
+            <template #editor="{ item: trip }">
+              <transition name="expand">
+                <div v-if="editingId === trip.id" class="expand">
+                  <div class="expand-inner">
                     <form
-                      v-if="editingId === trip.id"
-                      class="border rounded-3 p-3 mb-3 bg-light"
+                      :id="`edit-${trip.id}`"
+                      class="edit-well"
                       @submit.prevent="saveEdit(trip.id)"
                       @paste="onPaste"
                     >
                       <div class="mb-3">
-                        <label :for="`notes-${trip.id}`" class="form-label fw-semibold">Entry Notes / Thoughts</label>
+                        <label :for="`notes-${trip.id}`" class="form-label field-label">Your notes</label>
                         <textarea
                           :id="`notes-${trip.id}`"
                           v-model="draft.entry_notes"
-                          class="form-control"
+                          class="form-control notes-input"
                           rows="3"
                           placeholder="How was the trip?"
                         ></textarea>
                       </div>
 
-                      <!-- Image Upload Picker -->
+                      <!-- Image Upload Picker: a real button opens the hidden file input -->
                       <div class="mb-3">
-                        <label class="form-label fw-semibold">Trip Photo</label>
+                        <p class="field-label mb-2">Trip photo</p>
 
                         <input
+                          :ref="setFileInput"
                           type="file"
                           :id="`photo-${trip.id}`"
                           accept="image/*"
-                          class="d-none"
+                          class="visually-hidden"
+                          tabindex="-1"
+                          aria-hidden="true"
                           @change="onFilePicked"
                         />
-                        <label :for="`photo-${trip.id}`" class="btn btn-photo w-100" :class="{ disabled: photoBusy }">
-                          <span v-if="photoBusy">⏳ Processing photo…</span>
-                          <span v-else>📁 {{ draft.photo_url ? 'Change Selected Photo' : 'Choose Image from Device' }}</span>
-                        </label>
-                        <div class="form-text">You can also paste a copied image (Ctrl/Cmd + V).</div>
+                        <button
+                          type="button"
+                          class="btn-wb-secondary photo-btn"
+                          :disabled="photoBusy"
+                          :aria-busy="photoBusy ? 'true' : 'false'"
+                          :aria-describedby="photoError ? `photo-help-${trip.id} photo-error-${trip.id}` : `photo-help-${trip.id}`"
+                          @click="pickPhoto"
+                        >
+                          <template v-if="photoBusy">Processing photo…</template>
+                          <template v-else>
+                            <i class="bi bi-camera" aria-hidden="true"></i>
+                            {{ draft.photo_url ? 'Replace photo' : 'Add photo' }}
+                          </template>
+                        </button>
+                        <div :id="`photo-help-${trip.id}`" class="form-text field-help">You can also paste a copied image (Ctrl/Cmd + V).</div>
 
-                        <div v-if="photoError" class="text-danger small mt-2">{{ photoError }}</div>
+                        <div v-if="photoError" :id="`photo-error-${trip.id}`" class="wb-field-error" role="alert">{{ photoError }}</div>
 
                         <!-- Preview of the selected photo -->
                         <div v-if="draft.photo_url" class="photo-preview mt-3">
-                          <img :src="draft.photo_url" alt="Selected photo preview" />
+                          <img :src="draft.photo_url" :alt="`New photo for ${trip.end_stop || 'this trip'}`" width="640" height="400" />
                           <button
                             type="button"
                             class="photo-remove"
                             aria-label="Remove photo"
                             @click="clearPhoto"
-                          >✕</button>
+                          ><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                         </div>
                       </div>
 
-                      <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-save text-white fw-bold" :disabled="saving">
-                          {{ saving ? 'Saving...' : 'Save Changes' }}
+                      <div class="d-flex flex-wrap gap-2">
+                        <button
+                          type="submit"
+                          class="btn-wb-primary"
+                          :disabled="saving || photoBusy"
+                          :aria-busy="saving ? 'true' : 'false'"
+                        >
+                          {{ saving ? 'Saving…' : 'Save changes' }}
                         </button>
-                        <button type="button" class="btn btn-outline-secondary rounded-pill px-4" @click="cancelEdit">
+                        <button type="button" class="btn-wb-secondary" @click="cancelEdit">
                           Cancel
                         </button>
                       </div>
                     </form>
-                  </transition>
-
-                  <!-- Card Action Buttons -->
-                  <div class="mt-auto pt-2 d-flex justify-content-between align-items-center">
-                    <button
-                      type="button"
-                      class="btn btn-edit"
-                      @click="toggleEdit(trip)"
-                    >
-                      {{ editingId === trip.id ? 'Close' : '✏️ Edit' }}
-                    </button>
-
-                    <button
-                      type="button"
-                      class="btn btn-remove"
-                      @click="removeTrip(trip.id)"
-                    >
-                      Remove Memory
-                    </button>
                   </div>
-
                 </div>
+              </transition>
+            </template>
+
+            <template #actions="{ item: trip }">
+              <div class="trip-actions">
+                <button
+                  type="button"
+                  class="btn-wb-ghost btn-sm"
+                  :aria-expanded="editingId === trip.id ? 'true' : 'false'"
+                  :aria-controls="`edit-${trip.id}`"
+                  @click="toggleEdit(trip)"
+                >
+                  <i :class="['bi', editingId === trip.id ? 'bi-x-lg' : 'bi-pencil']" aria-hidden="true"></i>
+                  {{ editingId === trip.id ? 'Close editor' : 'Edit' }}
+                </button>
+
+                <button
+                  type="button"
+                  class="btn-wb-ghost btn-sm trip-delete"
+                  @click="removeTrip(trip.id)"
+                >
+                  <i class="bi bi-trash3" aria-hidden="true"></i>
+                  Delete trip
+                </button>
               </div>
-            </div>
-          </div>
+            </template>
+          </StampCarousel>
 
         </div>
       </div>
@@ -212,10 +160,15 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import StampCarousel from '~/components/ui/StampCarousel.vue'
+import WanderMascot from '~/components/ui/WanderMascot.vue'
+import LedBoard from '~/components/ui/LedBoard.vue'
 
 definePageMeta({ middleware: 'auth' })
 
 const { $supabase } = useNuxtApp()
+const toast = useToast()            // REDESIGN: replaces alert()
+const { confirm } = useConfirm()    // REDESIGN: replaces native confirm()
 
 const savedTrips = ref([])
 const loading = ref(true)
@@ -264,18 +217,38 @@ onMounted(() => {
   loadCredits()
 })
 
-const toggleEdit = (trip) => {
+const toggleEdit = async (trip) => {
   if (editingId.value === trip.id) {
     cancelEdit()
     return
   }
+  // opening another card closes the current editor, so guard its changes too
+  if (!(await confirmDiscard())) return
   editingId.value = trip.id
   photoError.value = ''
   draft.entry_notes = trip.entry_notes || ''
   draft.photo_url = trip.photo_url || ''
 }
 
-const cancelEdit = () => {
+// Unsaved-edit guard: only asks when the draft differs from the saved entry
+const hasUnsavedEdits = () => {
+  const trip = savedTrips.value.find(t => t.id === editingId.value)
+  if (!trip) return false
+  return draft.entry_notes !== (trip.entry_notes || '') || draft.photo_url !== (trip.photo_url || '')
+}
+
+const confirmDiscard = async () => {
+  if (!hasUnsavedEdits()) return true
+  return confirm({
+    title: 'Discard your changes?',
+    body: 'Your edits to this trip haven’t been saved.',
+    confirmLabel: 'Discard changes',
+    cancelLabel: 'Keep editing'
+  })
+}
+
+const cancelEdit = async () => {
+  if (!(await confirmDiscard())) return
   editingId.value = null
 }
 
@@ -301,8 +274,11 @@ const saveEdit = async (id) => {
 
     await loadTrips()
     editingId.value = null
+    toast.success('Changes saved to your passport.')
   } catch (err) {
-    alert('Failed to save changes: ' + err.message)
+    toast.error('Couldn’t save your changes: ' + err.message, {
+      action: { label: 'Retry', run: () => saveEdit(id) }
+    })
   } finally {
     saving.value = false
   }
@@ -311,7 +287,12 @@ const saveEdit = async (id) => {
 // DELETE: Remove record from `passport_entries`
 // CHANGED: .select() + empty-result check so a blocked delete (RLS) is not silent
 const removeTrip = async (id) => {
-  if (!confirm('Are you sure you want to delete this passport entry?')) return
+  const stop = savedTrips.value.find(t => t.id === id)?.end_stop
+  if (!(await confirm({
+    title: stop ? `Delete your trip to ${stop}?` : 'Delete this trip?',
+    body: 'Your notes and photo for this trip will be gone for good.',
+    confirmLabel: 'Delete trip'
+  }))) return
 
   try {
     const { data, error } = await $supabase
@@ -325,8 +306,9 @@ const removeTrip = async (id) => {
 
     if (editingId.value === id) editingId.value = null
     await loadTrips()
+    toast.success(stop ? `Trip to ${stop} deleted.` : 'Trip deleted.')
   } catch (err) {
-    alert('Failed to delete entry: ' + err.message)
+    toast.error('Couldn’t delete that trip: ' + err.message)
   }
 }
 
@@ -372,6 +354,11 @@ const photoError = ref('')
 const photoBusy = ref(false)
 const failedPhotos = reactive({})
 
+// REDESIGN: the visible "Add photo" button opens the hidden file input
+const fileInput = ref(null)
+const setFileInput = (el) => { fileInput.value = el }
+const pickPhoto = () => fileInput.value?.click()
+
 const hasPhoto = (trip) => !!trip.photo_url && !failedPhotos[trip.id]
 
 const compressImage = (file) =>
@@ -403,18 +390,18 @@ const handleFile = async (file) => {
   photoError.value = ''
   if (!file) return
   if (!file.type.startsWith('image/')) {
-    photoError.value = 'Please choose an image file (JPG, PNG, WEBP...).'
+    photoError.value = 'Choose an image file, like a JPG, PNG or WEBP.'
     return
   }
   if (file.size > MAX_FILE_MB * 1024 * 1024) {
-    photoError.value = `That image is too large (max ${MAX_FILE_MB} MB).`
+    photoError.value = `That image is over ${MAX_FILE_MB} MB. Pick a smaller one.`
     return
   }
   photoBusy.value = true
   try {
     draft.photo_url = await compressImage(file)
   } catch {
-    photoError.value = "Couldn't read that image. HEIC photos may need converting to JPG first."
+    photoError.value = 'Couldn’t read that image. If it’s a HEIC photo, convert it to JPG first.'
   } finally {
     photoBusy.value = false
   }
@@ -439,133 +426,140 @@ const clearPhoto = () => {
 </script>
 
 <style scoped>
-.bg-teal {
-  background-color: #1b7a86 !important;
+/* All colour, type and space come from tokens in main.css (§2). */
+.passport-page {
+  min-height: 100%;
+  padding: var(--sp-6) var(--gutter) var(--sp-8);
+  background: var(--wb-ground);
 }
 
-.photo-col {
-  position: relative;
-  min-height: 220px;
-  background: #e9ecef;
-}
-.trip-photo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-}
-
-/* NEW: journey timeline */
-.journey-step {
-  position: relative;
+/* ── Header ── */
+.passport-head {
   display: flex;
-  gap: 14px;
-  padding-bottom: 18px;
-}
-.journey-step:not(:last-child)::before {
-  content: '';
-  position: absolute;
-  left: 17px;
-  top: 38px;
-  bottom: 2px;
-  border-left: 2px dashed #b9d9dd;
-}
-.journey-step:last-child {
-  padding-bottom: 0;
-}
-.journey-dot {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #e8f4f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-}
-.journey-dot.bus {
-  background: #1b7a86;
-}
-.journey-dot.end {
-  background: #e3f5ec;
-}
-.journey-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #6c757d;
-}
-.journey-value {
-  font-weight: 700;
-  color: #141a33;
-}
-.bus-pill {
-  display: inline-block;
-  background: #1b7a86;
-  color: #fff;
-  border-radius: 50px;
-  padding: 2px 14px;
-  font-weight: 700;
-}
-.chip {
-  background: #f1f3f5;
-  border-radius: 50px;
-  padding: 4px 12px;
-  font-size: 0.85rem;
-  color: #495057;
-}
-
-/* NEW: start -> arrival strip */
-.time-strip {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  background: #f1f8f9;
-  border-radius: 12px;
-  padding: 12px 16px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
 }
-.time-big {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #141a33;
-  line-height: 1.2;
+.passport-title {
+  margin: 0;
+  font-size: var(--fs-title);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
-.time-mid {
-  flex: 1;
+.passport-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-3);
 }
-.time-line {
-  flex: 1;
-  border-top: 2px dashed #b9d9dd;
+.trip-count {
+  color: var(--wb-text-2);
+  font-size: var(--fs-small);
+}
+.credits-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 36px;
+  padding: var(--sp-1) var(--sp-4);
+  border-radius: var(--r-pill);
+  background: var(--wb-amber-tint);
+  color: var(--wb-amber-ink);
+  font-size: var(--fs-small);
+  font-weight: 500;
 }
 
-.btn-photo {
-  background: #fff;
-  border: 1px dashed #1b7a86;
-  color: #1b7a86;
-  border-radius: 12px;
-  padding: 12px;
-  font-weight: 600;
+/* ── Loading / error / empty ── */
+.state-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-7) var(--sp-5);
+  border-radius: var(--r-card);
+  background: var(--wb-surface);
+  color: var(--wb-text-2);
+  text-align: center;
 }
-.btn-photo:hover {
-  background: #1b7a86;
-  color: #fff;
+.state-error {
+  background: var(--wb-danger-bg);
+  color: var(--wb-danger);
+}
+.state-empty {
+  color: var(--wb-ink);
+  font-size: var(--fs-lead);
+}
+.empty-board {
+  width: 100%;
+  max-width: 420px;
+}
+
+/* Trip cards, journey and photo styles moved into StampCarousel.vue (the memory card). */
+
+/* ── Expandable editor: grid-rows 0fr → 1fr + opacity (§2.7) ── */
+.expand {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.expand-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.expand-enter-active,
+.expand-leave-active {
+  transition: grid-template-rows var(--t-ui) var(--ease), opacity var(--t-ui) var(--ease);
+}
+.expand-enter-from,
+.expand-leave-to {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.edit-well {
+  padding: var(--sp-4);
+  border-radius: var(--r-control);
+  background: var(--wb-surface-2);
+}
+.field-label {
+  color: var(--wb-ink);
+  font-weight: 500;
+}
+.field-help {
+  color: var(--wb-text-2);
+  font-size: var(--fs-small);
+}
+.form-control {
+  border-color: var(--wb-control);
+  border-radius: var(--r-control);
+  background: var(--wb-surface);
+  color: var(--wb-ink);
+}
+.form-control:focus {
+  border-color: var(--wb-green);
+  box-shadow: none; /* taste-skill-ignore: removes Bootstrap focus glow, no shadow added */
+  outline: 3px solid var(--wb-green-tint);
+  outline-offset: 0;
+}
+.notes-input {
+  font-family: var(--font-hand);
+  font-size: 1.375rem;
+  line-height: 1.25;
+}
+
+.photo-btn {
+  width: 100%;
 }
 
 .photo-preview {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 10;
-  border-radius: 12px;
+  border-radius: var(--r-control);
   overflow: hidden;
-  background: #e9ecef;
+  background: var(--wb-surface);
 }
 .photo-preview img {
   width: 100%;
@@ -575,74 +569,46 @@ const clearPhoto = () => {
 }
 .photo-remove {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 30px;
-  height: 30px;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   border: none;
   border-radius: 50%;
-  background: rgba(220, 53, 69, 0.92);
-  color: #fff;
-  font-size: 14px;
-  line-height: 1;
+  background: var(--wb-ink);
+  color: var(--wb-on-ink);
+  font-size: 16px;
   cursor: pointer;
+  touch-action: manipulation;
+  transition: transform var(--t-micro) var(--ease);
+}
+.photo-remove:hover {
+  transform: scale(1.05);
+}
+.photo-remove:focus-visible {
+  outline: 3px solid var(--wb-amber);
+  outline-offset: 2px;
 }
 
-.btn-save {
-  background: #0b7a4b;
-  border: none;
-  border-radius: 50px;
-  padding: 10px 22px;
-  font-weight: 600;
-  color: #fff;
+/* ── Card actions ── */
+.trip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: auto;
+  /* pull ghost buttons to the text edge */
+  margin-inline: calc(var(--sp-3) * -1);
 }
-.btn-save:hover {
-  background: #095f3b;
-  color: #fff;
+.trip-delete {
+  color: var(--wb-danger);
 }
-
-.btn-edit {
-  background: #fff;
-  border: 1px solid #1b7a86;
-  color: #1b7a86;
-  border-radius: 50px;
-  padding: 8px 20px;
-  font-weight: 600;
-}
-.btn-edit:hover {
-  background: #1b7a86;
-  color: #fff;
-}
-
-.btn-remove {
-  background: #dc3545;
-  border: none;
-  color: #fff;
-  border-radius: 50px;
-  padding: 8px 20px;
-  font-weight: 600;
-}
-.btn-remove:hover {
-  background: #b02a37;
-  color: #fff;
-}
-
-.expand-enter-active,
-.expand-leave-active {
-  transition: all 0.25s ease;
-  max-height: 1200px;
-  overflow: hidden;
-}
-.expand-enter-from,
-.expand-leave-to {
-  opacity: 0;
-  max-height: 0;
-}
-
-.credits-pill {
-  background: #fdf3d7;
-  color: #7a5200;
-  font-size: 0.95rem;
-  padding: 8px 14px;
+.trip-delete:hover {
+  background: var(--wb-danger-bg);
+  color: var(--wb-danger);
 }
 </style>
