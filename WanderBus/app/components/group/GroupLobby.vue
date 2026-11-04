@@ -137,8 +137,8 @@ onMounted(async () => {
       member => member.user_id != groupDetails.host_id
     )
     async function reloadMembers(){
-      const { data } = $supabase.from('group_members').select('user_id, display_name').eq(`group_code=${props.group.group_code}`)
-      groupMembers.value = (data || []).filter(m => m.userId!= groupDetails.host_id)
+      const { data } = await $supabase.from('group_members').select('user_id, display_name').eq('group_code', props.group.group_code)
+      groupMembers.value = (data || []).filter(m => m.user_id != groupDetails.host_id)
     }
     channel = $supabase.channel(`group-${props.group.group_code}`).on('postgres_changes', {
       event: 'UPDATE',
