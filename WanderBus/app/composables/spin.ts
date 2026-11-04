@@ -42,8 +42,8 @@ export async function spin(preferences:any,selectedPlace:any,travelTime:any){
         possibleStops.value = filterBusStops(arrivals, travelTime, allRoutes, starts)
         possibleStops.value = filterByAmens(preferences, possibleStops.value, amenStops)
         chosenStop.value = chooseStop(possibleStops.value)
-        stopDetails.value = busStops.find(stop => stop.BusStopCode === chosenStop.value.destination)
-        startDetails.value = busStops.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+        stopDetails.value = busStops.find((stop:any) => stop.BusStopCode === chosenStop.value.destination)
+        startDetails.value = busStops.find((stop:any) => stop.BusStopCode === chosenStop.value.chosen.boardAt)
     }catch(e){
                 errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
 
