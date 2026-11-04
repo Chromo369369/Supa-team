@@ -53,11 +53,11 @@ async function shareSpin(){
 async function saveTrip(){
         try{
             const {data, error} = await $supabase.from('passport_entries').insert({
-                starting_stop: sharedSpin.value.startDetails.value.Description,
-                end_stop: sharedSpin.value.stopDetails.value.Description,
-                time_taken: Math.ceil(chosenStop.value.chosen.totalTime),
-                bus_taken: sharedSpin.value.chosenStop.value.chosen.bus,
-                starting_location: sharedSpin.value.selectedPlace.value.ADDRESS
+                starting_stop: sharedSpin.value.startDetails.Description,
+                end_stop: sharedSpin.value.stopDetails.Description,
+                time_taken: Math.ceil(sharedSpin.value.chosenStop.chosen.totalTime),
+                bus_taken: sharedSpin.value.chosenStop.chosen.bus,
+                starting_location: sharedSpin.value.startingAddress
             })
             if(error){
                 alert(`Could not save your trip: ${error.message}`)
@@ -73,7 +73,7 @@ async function saveTrip(){
 
 async function respin2(){
 
-  result.value = {...result.value,...respin(response.data.value,result.value.possibleStops)
+  result.value = {...result.value,...reroll(response.data.value,result.value.possibleStops)
   
   }
   await shareSpin()
@@ -272,6 +272,7 @@ async function copyCode() {
           type="button"
           class="lobby-button green-button"
           :disabled="!isHost"
+          :hidden="!isHost"
           @click="ready=true"
         >
           Ready
@@ -280,6 +281,7 @@ async function copyCode() {
           type="button"
           class="lobby-button green-button"
           :disabled="!isHost && !sharedSpin"
+          :hidden="isHost"
           @click="ready=true"
         >
           Waiting for host to spin...
@@ -304,6 +306,7 @@ async function copyCode() {
         :starting-stops="result?.startingStops"
         :preferences="preferences"
         @reroll="respin2()"
+        @save-trip="saveTrip()"
         />
         <SpinResults
           v-if="!isHost && sharedSpin"
@@ -313,11 +316,9 @@ async function copyCode() {
           :start-details="sharedSpin.startDetails"
           :starting-stops="sharedSpin.startingStops"
           :preferences="sharedSpin.preferences"
+          @save-trip="saveTrip()"
         />
-        <SpinSubmit
-        :submitted="!!sharedSpin"
-        @saveTrip="saveTrip()"
-        />
+        
     
 
       </div>
