@@ -22,6 +22,8 @@
             return
         }
         if(data.session){
+            // replay the BoardingIntro on home after every login (it normally plays once per tab)
+            try { sessionStorage.removeItem('wb-intro-seen') } catch {}
             await navigateTo('/home',{replace:true})
         }
 }
