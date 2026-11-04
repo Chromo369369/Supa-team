@@ -149,7 +149,7 @@ onMounted(async () => {
     (payload) => {sharedSpin.value = payload.new.current_spin})
     .on('postgres_changes',
     { event: '*', schema: 'public', table: 'group_members', filter: `group_code=eq.${props.group.group_code}` },
-    reloadMembers
+    reloadMembers)
     .subscribe()
   } catch {
     membersError.value = 'Couldn’t load your crew. Refresh the page to try again.'
