@@ -28,18 +28,57 @@ const locResponse = await useFetch('/api/onemap', {
 })
 const submitted= ref(false)
 const response = await useFetch('/api/allBusStops')
+const sharedSpin: any = ref(null)
 
+async function shareSpin(){
+  if (!result.value){
+    return
+  }
+  const spinData = {
+    chosenStop: result.value.chosenStop,
+    stopDetails: result.value.stopDetails,
+    startDetails: result.value.startDetails,
+    startingStops: result.value.startingStops,
+    preferences: preferences.value,
+    startingAddress: selectedPlace.value.ADDRESS
+  }
+  const {data,error} = await $supabase.from('groups').update( {currentSpin: spinData}).eq('group_code', props.group.group_code).select()
+  if (error || !data?.length){alert('could not share spin', error)}
+}
+async function saveTrip(){
+        try{
+            const {data, error} = await $supabase.from('passport_entries').insert({
+                starting_stop: sharedSpin.startDetails.value.Description,
+                end_stop: sharedSpin.stopDetails.value.Description,
+                time_taken: Math.ceil(chosenStop.value.chosen.totalTime),
+                bus_taken: sharedSpin.chosenStop.value.chosen.bus,
+                starting_location: sharedSpin.selectedPlace.value.ADDRESS
+            })
+            if(error){
+                alert(`Could not save your trip: ${error.message}`)
+                return
+            }
+            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
+            
+                
+        }catch(e){
+            console.log(e)
+        }
+    }
 
 async function respin2(){
 
   result.value = {...result.value,...respin(response.data.value,result.value.possibleStops)
-}
+  
+  }
+  await shareSpin()
 }
 
 async function spin2(){
   submitted.value=true
   result.value = null
   result.value = await spin(preferences.value,selectedPlace.value,travelTime.value,submitted.value)
+  await shareSpin()
 }
 
 
@@ -52,10 +91,10 @@ onMounted(async () => {
 
     const { data: groupDetails, error: groupError } = await $supabase
       .from('groups')
-      .select('host_id')
+      .select('host_id','current_spin')
       .eq('group_code', props.group.group_code)
       .maybeSingle()
-
+    sharedSpin.value = groupDetails.current_spin
     if (groupError) throw groupError
     if (!groupDetails) throw new Error('Group not found')
 
@@ -191,6 +230,14 @@ async function leaveGroup() {
         >
           Ready
         </button>
+        <button
+          type="button"
+          class="lobby-button green-button"
+          :disabled="!isHost && !sharedSpin"
+          @click="ready=true"
+        >
+          Waiting for host to spin...
+        </button>
         <SpinFilters
         v-if="ready"
         v-model:travelTime="travelTime"
@@ -212,6 +259,21 @@ async function leaveGroup() {
         :preferences="preferences"
         @reroll="respin2()"
         />
+        <SpinResults
+          v-if="!isHost && sharedSpin"
+          :submitted="true"
+          :chosen-stop="sharedSpin.chosenStop"
+          :stop-details="sharedSpin.stopDetails"
+          :start-details="sharedSpin.startDetails"
+          :starting-stops="sharedSpin.startingStops"
+          :preferences="sharedSpin.preferences"
+        />
+        <SpinSubmit
+        :submitted="!!sharedSpin"
+        @saveTrip="saveTrip()"
+        />
+    
+
       </div>
     </div>
   </div>
