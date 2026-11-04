@@ -28,25 +28,20 @@ defineProps({
 </template>
 
 <style scoped>
+/* Sits straight on the page ground (no dotted grid); the card is a flat surface (design.md §4.2). */
 .auth-page {
   display: flex;
   justify-content: center;
   align-items: flex-start;
   min-height: 100%;
-  margin: -20px;
-  padding: 40px 16px 64px;
-  background-color: #f9f9fb;
-  background-image: radial-gradient(#e3e5ec 1px, transparent 1px);
-  background-size: 22px 22px;
+  padding: var(--sp-5) 0 var(--sp-8);
 }
 
 .auth-card {
   width: 100%;
   max-width: 28rem;
-  background: #fff;
-  border: 1px solid #e3e5ec;
-  border-radius: 20px;
-  box-shadow: 0 12px 32px rgba(20, 26, 51, 0.1);
+  background: var(--wb-surface);
+  border-radius: var(--r-card);
   overflow: hidden;
 }
 
@@ -55,75 +50,54 @@ defineProps({
 }
 
 .auth-body {
-  padding: 24px;
+  padding: var(--sp-5);
 }
 
 @media (min-width: 576px) {
   .auth-body {
-    padding: 32px;
+    padding: var(--sp-6);
   }
 }
 
 .auth-title {
-  margin-bottom: 4px;
-  font-size: 1.8rem;
-  font-weight: 800;
-  color: #141a33;
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-title);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
 .auth-intro {
-  color: #6b7085;
+  margin: 0;
+  color: var(--wb-text-2);
 }
 
 .auth-body :deep(.auth-form) {
   display: grid;
-  gap: 16px;
-  margin-top: 20px;
+  gap: var(--sp-4);
+  margin-top: var(--sp-5);
 }
 
 .auth-body :deep(.form-label) {
   margin-bottom: 6px;
-  font-weight: 600;
-  color: #141a33;
+  font-weight: 500;
+  color: var(--wb-ink);
 }
 
 .auth-body :deep(.form-control) {
-  padding: 10px 12px;
-  border: 1px solid #c9ccd6;
-  border-radius: 12px;
-}
-
-.auth-body :deep(.form-control:focus) {
-  border-color: #0b7a4b;
-  box-shadow: 0 0 0 3px rgba(11, 122, 75, 0.2);
-}
-
-.auth-body :deep(.btn-wb-green) {
-  padding: 12px 28px;
-  border-radius: 50px;
-  background: #0b7a4b;
-  color: #fff;
-  font-weight: 700;
-}
-
-.auth-body :deep(.btn-wb-green:hover) {
-  background: #096640;
-  color: #fff;
-}
-
-.auth-body :deep(.btn-wb-green:disabled) {
-  background: #9cc9b5;
-  color: #fff;
+  padding: 10px 12px; /* border, radius and focus ring come from main.css */
 }
 
 .auth-switch {
-  margin-top: 24px;
+  margin: var(--sp-5) 0 0;
   text-align: center;
-  color: #4a5068;
+  color: var(--wb-text-2);
 }
 
 .auth-switch :deep(a) {
-  color: #0b7a4b;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--wb-green);
   font-weight: 600;
 }
 </style>

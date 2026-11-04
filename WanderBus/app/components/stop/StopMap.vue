@@ -15,6 +15,7 @@ const emit = defineEmits(['select', 'drop', 'drop-outside', 'move-draft'])
 
 const waves = 12        // the sweep is split into 12 slices of 30 degrees
 const sweepMs = 2000
+const hitSize = 44      // every pin is a 44px tap target, the visible circle/square sits inside it
 
 const mapEl = ref(null)
 const sweeping = ref(false)
@@ -25,6 +26,8 @@ let draftMarker = null
 let markers = {}    // place id / activity key -> leaflet marker
 let sweepTimer = null
 
+const mapLabel = computed(() => `Map of places within ${props.radius >= 1000 ? `${props.radius / 1000} km` : `${props.radius} m`} of ${props.stop.name}`)
+
 // which slice of the sweep a place is in, from its compass bearing (0 = north, clockwise)
 function waveOf(place) {
     let dx = (place.lon - props.stop.lon) * Math.cos(props.stop.lat * Math.PI / 180)
@@ -33,26 +36,54 @@ function waveOf(place) {
     return Math.min(waves - 1, Math.floor(bearing / (360 / waves)))
 }
 
+// the outer div is leaflet's (and the 44px hit area), the inner span is the pin people see
+function pinHtml(kindClass, style, selected, extraClass = '') {
+    return `<span class="${kindClass} ${extraClass} ${selected ? 'is-selected' : ''}" style="--pin:${style.colour};--glyph:${style.glyph}">`
+        + `<i class="bi ${style.icon}" aria-hidden="true"></i></span>`
+}
+
 function pinIcon(place, selected) {
-    const style = placeStyle(place.category)
-    const size = selected ? 44 : 32
     return L.divIcon({
-        className: '',
-        html: `<div class="place-pin wave-${waveOf(place)} ${selected ? 'is-selected' : ''}" style="--pin:${style.colour}">${style.icon}</div>`,
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2]
+        className: 'wb-pin',
+        html: pinHtml('place-pin', placeStyle(place.category), selected, `wave-${waveOf(place)}`),
+        iconSize: [hitSize, hitSize],
+        iconAnchor: [hitSize / 2, hitSize / 2]
     })
 }
 
-function activityIcon(activity, selected) {
-    const style = activityStyles[activity.kind]
-    const size = selected ? 44 : 32
+function activityIcon(activity, selected, isDraft = false) {
     return L.divIcon({
-        className: '',
-        html: `<div class="activity-pin ${selected ? 'is-selected' : ''}" style="--pin:${style.colour}">${style.icon}</div>`,
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2]
+        className: 'wb-pin',
+        html: pinHtml('activity-pin', activityStyles[activity.kind], selected, isDraft ? 'is-draft' : ''),
+        iconSize: [hitSize, hitSize],
+        iconAnchor: [hitSize / 2, hitSize / 2]
     })
+}
+
+function placeLabel(place) {
+    return `${place.name}, ${placeStyle(place.category).label}, ${place.distanceM} m from the stop`
+}
+
+function activityLabel(activity) {
+    let who = activity.isMine ? 'Your' : `${activity.author_name}’s`
+    let what = activity.kind == 'signpost' ? 'signpost' : `challenge “${activity.title}”`
+    return `${who} ${what}, ${activity.distanceM} m from the stop`
+}
+
+// leaflet makes markers focusable buttons (keyboard: true), this names them and lets Enter/Space pick them
+function labelMarker(marker, label, selected) {
+    let el = marker.getElement()
+    if (!el) return
+    el.setAttribute('aria-label', label)
+    if (selected !== undefined) el.setAttribute('aria-pressed', String(selected))
+}
+
+function onPinKey(event, run) {
+    let key = event.originalEvent.key
+    if (key === 'Enter' || key === ' ') {
+        event.originalEvent.preventDefault()
+        run()
+    }
 }
 
 function isInside(latlng) {
@@ -67,22 +98,26 @@ function drawPlaces() {
         let selected = activity.key === props.selectedId
         let marker = L.marker([activity.lat, activity.lon], {
             icon: activityIcon(activity, selected),
-            title: activity.kind == 'signpost' ? activity.note : activity.title,
+            title: activityLabel(activity),
             zIndexOffset: selected ? 1000 : 500
         })
         marker.on('click', () => emit('select', activity.key))
+        marker.on('keydown', event => onPinKey(event, () => emit('select', activity.key)))
         marker.addTo(activityLayer)
+        labelMarker(marker, activityLabel(activity), selected)
         markers[activity.key] = marker
     }
     for (let place of props.places) {
         let selected = place.id === props.selectedId
         let marker = L.marker([place.lat, place.lon], {
             icon: pinIcon(place, selected),
-            title: place.name,
+            title: placeLabel(place),
             zIndexOffset: selected ? 1000 : 0
         })
         marker.on('click', () => emit('select', place.id))
+        marker.on('keydown', event => onPinKey(event, () => emit('select', place.id)))
         marker.addTo(placeLayer)
+        labelMarker(marker, placeLabel(place), selected)
         markers[place.id] = marker
     }
 }
@@ -101,11 +136,14 @@ function drawDraft() {
     if (draftMarker) draftMarker.remove()
     draftMarker = null
     if (!props.draft) return
+    let label = `Your new ${props.draft.kind}, drag to move it`
     draftMarker = L.marker([props.draft.lat, props.draft.lon], {
-        icon: activityIcon(props.draft, true),
+        icon: activityIcon(props.draft, true, true),
+        title: label,
         draggable: true,
         zIndexOffset: 3000
     }).addTo(map)
+    labelMarker(draftMarker, label)
     draftMarker.on('dragend', () => {
         let latlng = draftMarker.getLatLng()
         if (isInside(latlng)) {
@@ -125,6 +163,11 @@ function runSweep() {
     sweepTimer = setTimeout(() => { sweeping.value = false }, sweepMs + 500)
 }
 
+// leaflet draws the circle as SVG attributes, which can't read CSS variables, so read the token's value
+function token(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
+
 onMounted(() => {
     map = L.map(mapEl.value, { minZoom: 11, maxZoom: 19 })
 
@@ -136,20 +179,27 @@ onMounted(() => {
         attribution: '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a> &copy; contributors | <a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>'
     }).addTo(map)
 
-    const walkCircle = L.circle([props.stop.lat, props.stop.lon], {
+    L.circle([props.stop.lat, props.stop.lon], {
         radius: props.radius,
-        color: '#1e8a4c',
+        color: token('--wb-green'),
         weight: 2,
         dashArray: '6 6',
-        fillColor: '#1e8a4c',
-        fillOpacity: 0.08
+        fillColor: token('--wb-green'),
+        fillOpacity: 0.08,
+        interactive: false
     }).addTo(map)
 
-    L.marker([props.stop.lat, props.stop.lon], {
-        icon: L.divIcon({ className: '', html: '<div class="stop-pin">🚌</div>', iconSize: [34, 34], iconAnchor: [17, 17] }),
-        title: props.stop.name,
+    let stopMarker = L.marker([props.stop.lat, props.stop.lon], {
+        icon: L.divIcon({
+            className: 'wb-pin',
+            html: '<span class="stop-pin"><i class="bi bi-bus-front" aria-hidden="true"></i></span>',
+            iconSize: [hitSize, hitSize],
+            iconAnchor: [hitSize / 2, hitSize / 2]
+        }),
+        title: `Bus stop: ${props.stop.name}`,
         zIndexOffset: 2000
     }).addTo(map)
+    labelMarker(stopMarker, `Bus stop: ${props.stop.name} (${props.stop.code})`)
 
     // circle.getBounds() needs the map to already have a view, so work the bounds out from the stop instead
     map.fitBounds(L.latLng(props.stop.lat, props.stop.lon).toBounds(props.radius * 2), { padding: [16, 16] })
@@ -168,13 +218,15 @@ watch(() => props.selectedId, (newId, oldId) => {
     for (let id of [oldId, newId]) {
         let place = props.places.find(p => p.id === id)
         let activity = props.activities.find(a => a.key === id)
-        if (place) {
+        if (place && markers[id]) {
             markers[id].setIcon(pinIcon(place, id === newId))
             markers[id].setZIndexOffset(id === newId ? 1000 : 0)
+            labelMarker(markers[id], placeLabel(place), id === newId)
         }
-        if (activity) {
+        if (activity && markers[id]) {
             markers[id].setIcon(activityIcon(activity, id === newId))
             markers[id].setZIndexOffset(id === newId ? 1000 : 500)
+            labelMarker(markers[id], activityLabel(activity), id === newId)
         }
     }
     if (newId && markers[newId]) map.panTo(markers[newId].getLatLng())
@@ -187,19 +239,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="stop-map-wrap" @dragover.prevent @drop.prevent="onDrop">
+    <div class="stop-map-wrap" role="region" :aria-label="mapLabel" @dragover.prevent @drop.prevent="onDrop">
         <div class="stop-map-box" :class="{ 'is-sweeping': sweeping }">
             <div ref="mapEl" class="stop-map"></div>
             <div v-if="sweeping" class="map-sweep" aria-hidden="true"><span class="sweep-disc"></span></div>
         </div>
-        <ul class="map-legend">
+        <ul class="map-legend" aria-label="Map key">
             <li v-for="(style, key) in placeSections" :key="key">
-                <span class="legend-dot" :style="{ background: style.colour }"></span>{{ style.label }}
+                <span class="legend-dot" :style="{ '--pin': style.colour, '--glyph': style.glyph }"><i class="bi" :class="style.icon" aria-hidden="true"></i></span>{{ style.label }}
             </li>
             <li v-for="(style, key) in activityStyles" :key="key">
-                <span class="legend-dot legend-activity" :style="{ background: style.colour }"></span>{{ style.label }}
+                <span class="legend-dot legend-activity" :style="{ '--pin': style.colour, '--glyph': style.glyph }"><i class="bi" :class="style.icon" aria-hidden="true"></i></span>{{ style.label }}
             </li>
-            <li><span class="legend-dot legend-stop"></span>Bus stop</li>
+            <li><span class="legend-dot legend-stop"><i class="bi bi-bus-front" aria-hidden="true"></i></span>Bus stop</li>
         </ul>
     </div>
 </template>
@@ -207,66 +259,83 @@ onBeforeUnmount(() => {
 <style scoped>
 .stop-map {
   height: 480px;
-  border: 1px solid #e3e5ec;
-  border-radius: 16px;
+  border-radius: var(--r-card);
+  background: var(--wb-surface-2);
   overflow: hidden;
   z-index: 0;
 }
 
-/* leaflet injects these, so they need :deep() to get styled */
-.stop-map :deep(.place-pin) {
-  width: 100%;
-  height: 100%;
+/* leaflet injects these, so they need :deep() to get styled.
+   .wb-pin is leaflet's 44px hit area, the pin people see is centred inside it */
+.stop-map :deep(.wb-pin) {
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  border-radius: var(--r-pill);
+}
+
+.stop-map :deep(.wb-pin:focus-visible) {
+  outline: 3px solid var(--wb-ink);
+  outline-offset: -3px;
+}
+
+.stop-map :deep(.place-pin),
+.stop-map :deep(.activity-pin) {
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
   background: var(--pin);
-  border: 2px solid #fff;
-  box-shadow: 0 2px 6px rgba(20, 26, 51, 0.35);
-  font-size: 15px;
+  color: var(--glyph);
+  border: 2px solid var(--wb-surface);
+  font-size: var(--fs-body);
+  line-height: 1;
   cursor: pointer;
-  transition: transform 0.15s;
+  transition: transform var(--t-micro) var(--ease), width var(--t-micro) var(--ease), height var(--t-micro) var(--ease);
 }
 
-.stop-map :deep(.place-pin:hover) {
-  transform: scale(1.12);
-}
-
-.stop-map :deep(.place-pin.is-selected) {
-  font-size: 20px;
-  box-shadow: 0 0 0 4px #f5a623, 0 2px 8px rgba(20, 26, 51, 0.4);
+.stop-map :deep(.place-pin) {
+  border-radius: 50%;
 }
 
 .stop-map :deep(.activity-pin) {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9px;
-  background: var(--pin);
-  border: 2px solid #fff;
-  box-shadow: 0 2px 6px rgba(20, 26, 51, 0.35);
-  font-size: 15px;
-  cursor: pointer;
+  border-radius: calc(var(--r-control) - 4px);
 }
 
+.stop-map :deep(.wb-pin:hover .place-pin) {
+  transform: scale(1.12);
+}
+
+/* selected = green ring (the selected state colour), a touch bigger */
+.stop-map :deep(.place-pin.is-selected),
 .stop-map :deep(.activity-pin.is-selected) {
-  font-size: 20px;
-  box-shadow: 0 0 0 4px #141a33, 0 2px 8px rgba(20, 26, 51, 0.4);
+  width: 40px;
+  height: 40px;
+  font-size: var(--fs-lead);
+  outline: 3px solid var(--wb-green);
+  outline-offset: 1px;
+}
+
+/* the draft pin is the one thing on the map that floats: it's being dragged */
+.stop-map :deep(.activity-pin.is-draft) {
+  cursor: grab;
+  box-shadow: var(--wb-lift); /* taste-skill-ignore: dragged pin floats (design.md §1, shadows only on things that float) */
 }
 
 .stop-map :deep(.stop-pin) {
-  width: 100%;
-  height: 100%;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: #141a33;
-  border: 2px solid #f5a623;
-  font-size: 17px;
+  border-radius: calc(var(--r-control) - 4px);
+  background: var(--wb-ink);
+  color: var(--wb-on-ink);
+  border: 2px solid var(--wb-amber);
+  font-size: var(--fs-body);
+  line-height: 1;
 }
 
 .stop-map-box {
@@ -280,18 +349,19 @@ onBeforeUnmount(() => {
   z-index: 450;
   display: grid;
   place-items: center;
-  border-radius: 16px;
+  border-radius: var(--r-card);
   overflow: hidden;
   pointer-events: none;
   container-type: size;
-  animation: sweep-fade 0.3s ease 2.2s both;
+  animation: sweep-fade 0.3s var(--ease) 2.2s both;
 }
 
 .sweep-disc {
   width: calc(min(100cqw, 100cqh) - 32px);
   aspect-ratio: 1;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent 0deg 270deg, rgba(30, 138, 76, 0.04) 270deg, rgba(30, 138, 76, 0.38) 358deg, rgba(245, 166, 35, 0.9) 360deg);
+  /* the radar sweep is one of the two gradients the design allows (design.md §1) */
+  background: conic-gradient(from 0deg, transparent 0deg 270deg, color-mix(in srgb, var(--wb-green) 4%, transparent) 270deg, color-mix(in srgb, var(--wb-green) 38%, transparent) 358deg, color-mix(in srgb, var(--wb-amber) 90%, transparent) 360deg); /* taste-skill-ignore: radar sweep, kept by design.md §0.3/§1 */
   animation: sweep-turn 2s linear both;
 }
 
@@ -306,7 +376,7 @@ onBeforeUnmount(() => {
 
 /* while the sweep runs, each pin pops in when the sweep reaches its slice */
 .is-sweeping :deep(.place-pin) {
-  animation: pin-pop 380ms ease-out both;
+  animation: pin-pop 380ms var(--ease) both;
 }
 
 .is-sweeping :deep(.wave-1) { animation-delay: 167ms; }
@@ -329,30 +399,40 @@ onBeforeUnmount(() => {
 .map-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: var(--sp-2) var(--sp-4);
   list-style: none;
   padding: 0;
-  margin: 10px 0 0;
-  font-size: 0.8rem;
-  color: #4a5068;
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-meta);
+  color: var(--wb-text-2);
+}
+
+.map-legend li {
+  display: inline-flex;
+  align-items: center;
 }
 
 .legend-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  margin-right: 6px;
+  margin-right: var(--sp-1);
+  background: var(--pin);
+  color: var(--glyph);
+  font-size: 10px;
 }
 
 .legend-activity {
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 .legend-stop {
-  background: #141a33;
-  border: 2px solid #f5a623;
-  border-radius: 2px;
+  background: var(--wb-ink);
+  color: var(--wb-on-ink);
+  border: 2px solid var(--wb-amber);
+  border-radius: 4px;
 }
 
 @media (max-width: 991.98px) {

@@ -11,6 +11,8 @@ const props = defineProps({
 })
 
 const { $supabase } = useNuxtApp()
+const toast = useToast()
+const { confirm } = useConfirm()
 const hostName = ref('Host')
 const isHost = ref(false)
 const groupMembers = ref([])
@@ -18,6 +20,7 @@ const loadingMembers = ref(true)
 const membersError = ref('')
 const currentUserId = ref('')
 const leavingGroup = ref(false)
+const hostLeft = ref(false)
 
 
 onMounted(async () => {
@@ -34,7 +37,11 @@ onMounted(async () => {
       .maybeSingle()
 
     if (groupError) throw groupError
-    if (!groupDetails) throw new Error('Group not found')
+    // the host leaving deletes the group row, so a missing group means the host left
+    if (!groupDetails) {
+      hostLeft.value = true
+      return
+    }
 
     isHost.value = userData.user.id == groupDetails.host_id
 
@@ -55,12 +62,16 @@ onMounted(async () => {
       }
     }
 
-    hostName.value = host.display_name
+    if (host) {
+      hostName.value = host.display_name
+    } else {
+      hostLeft.value = true
+    }
     groupMembers.value = allMembers.filter(
       member => member.user_id != groupDetails.host_id
     )
   } catch {
-    membersError.value = 'Unable to load group members'
+    membersError.value = 'Couldn’t load your crew. Refresh the page to try again.'
   } finally {
     loadingMembers.value = false
   }
@@ -68,6 +79,18 @@ onMounted(async () => {
 
 async function leaveGroup() {
   if (leavingGroup.value) return
+
+  const ok = await confirm(isHost.value
+    ? {
+        title: `Leave crew ${props.group.group_code}?`,
+        body: 'As host, leaving ends the crew for everyone.',
+        confirmLabel: 'End crew'
+      }
+    : {
+        title: `Leave crew ${props.group.group_code}?`,
+        confirmLabel: 'Leave crew'
+      })
+  if (!ok) return
 
   leavingGroup.value = true
 
@@ -99,9 +122,18 @@ async function leaveGroup() {
 
     emit('leave')
   } catch (error) {
-    alert(error.message)
+    toast.error(error.message)
   } finally {
     leavingGroup.value = false
+  }
+}
+
+async function copyCode() {
+  try {
+    await navigator.clipboard.writeText(props.group.group_code)
+    toast.success('Crew code copied.')
+  } catch {
+    toast.error('Couldn’t copy the code. Select it and copy it instead.')
   }
 }
 </script>
@@ -109,65 +141,82 @@ async function leaveGroup() {
 <template>
   <div class="row g-4 mt-2">
     <div class="col-12 col-lg-4">
-      <div class="lobby-card p-4 p-sm-5">
-
+      <div class="lobby-card">
         <h2>Everyone aboard?</h2>
-        <p>Wait here while everyone joins the group.</p>
+        <p>Wait here while your friends join the crew.</p>
 
-        <span class="code-label">Group code</span>
-        <div class="group-code">{{ group.group_code }}</div>
+        <p class="code-label">Crew code</p>
+        <div class="group-code num">{{ group.group_code }}</div>
 
         <button
           type="button"
-          class="lobby-button dark-button"
+          class="btn-wb-ghost lobby-button copy-button"
+          @click="copyCode"
+        >
+          <i class="bi bi-clipboard" aria-hidden="true"></i>
+          Copy code
+        </button>
+
+        <button
+          type="button"
+          class="btn-wb-secondary lobby-button leave-button"
           :disabled="leavingGroup || loadingMembers"
+          :aria-busy="leavingGroup ? 'true' : undefined"
           @click="leaveGroup"
         >
-          Leave group
+          {{ leavingGroup ? 'Leaving…' : 'Leave crew' }}
         </button>
       </div>
     </div>
 
     <div class="col-12 col-lg-8">
       <div class="lobby-card">
-        <div class="lobby-heading">
-          <h2>Trip lobby</h2>
+        <h2>Crew lobby</h2>
+        <p>Once everyone’s here, the host spins for the crew.</p>
+
+        <div v-if="hostLeft" class="member-row host-left" role="status">
+          <i class="bi bi-person-dash host-icon" aria-hidden="true"></i>
+          <div class="member-details">
+            <strong>Host left</strong>
+            <span>Nobody can start the spin without a host. Leave this crew, then host or join another.</span>
+          </div>
         </div>
-
-        <p>Gather your friends before spinning your next adventure.</p>
-
-        <div class="member-row">
+        <div v-else class="member-row">
+          <i class="bi bi-award-fill host-icon" aria-hidden="true"></i>
           <div class="member-details">
             <strong>{{ hostName }}</strong>
-            <span>Ready to explore</span>
+            <span>Host</span>
           </div>
-
         </div>
 
-        <div class="waiting-box">
-          <span v-if="loadingMembers">Loading group members...</span>
-          <span v-else-if="membersError">{{ membersError }}</span>
+        <div class="waiting-box" aria-live="polite">
+          <span v-if="loadingMembers">Loading your crew…</span>
+          <span v-else-if="membersError" role="alert">{{ membersError }}</span>
           <span v-else-if="groupMembers.length == 0">
-            Waiting for friends to join.
+            Waiting for friends to join…
           </span>
-          <template v-else>
-            <span
+          <ul v-else class="member-list">
+            <li
               v-for="member in groupMembers"
               :key="member.user_id"
             >
+              <i class="bi bi-person" aria-hidden="true"></i>
               {{ member.display_name }}
-            </span>
-          </template>
+            </li>
+          </ul>
         </div>
 
+        <p v-if="!isHost && !loadingMembers && !hostLeft" id="spin-hint" class="spin-hint">
+          Only the host can start the spin.
+        </p>
         <button
           type="button"
-          class="lobby-button green-button"
-          :disabled="!isHost"
+          class="btn-wb-primary lobby-button"
+          :disabled="!isHost || hostLeft"
+          :aria-describedby="!isHost && !loadingMembers && !hostLeft ? 'spin-hint' : undefined"
         >
-          Ready? Let's Spin!
+          Spin for the crew
         </button>
-
       </div>
     </div>
   </div>
@@ -176,112 +225,125 @@ async function leaveGroup() {
 <style scoped>
 .lobby-card {
   height: 100%;
-  padding: 32px;
-  background: #fff;
-  border: 1px solid #e3e5ec;
-  border-radius: 20px;
+  padding: var(--sp-5);
+  background: var(--wb-surface);
+  border-radius: var(--r-card);
   display: flex;
   flex-direction: column;
 }
 
 .lobby-card h2 {
-  color: #141a33;
-  font-size: 1.5rem;
-  font-weight: 700;
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-ui);
+  font-size: var(--fs-lead);
+  font-weight: 600;
 }
 
 .lobby-card p {
-  color: #4a5068;
+  margin: 0 0 var(--sp-4);
+  color: var(--wb-text-2);
 }
 
-
-.code-label {
-  margin: 12px 0 8px;
-  color: #141a33;
-  font-weight: 600;
+.lobby-card .code-label {
+  margin: var(--sp-2) 0 var(--sp-2);
+  color: var(--wb-ink);
+  font-weight: 500;
 }
 
 .group-code {
   width: 100%;
   min-width: 0;
-  padding: 20px 8px;
-  margin-bottom: 20px;
-  border: 1px dashed #b9c1ce;
-  border-radius: 12px;
-  background: #f6f8fb;
-  color: #141a33;
+  padding: var(--sp-4) var(--sp-2);
+  margin-bottom: var(--sp-3);
+  border-radius: var(--r-control);
+  background: var(--wb-surface-2);
+  color: var(--wb-ink);
   text-align: center;
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: 4px;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  overflow-wrap: anywhere;
 }
 
 .lobby-button {
   width: 100%;
-  padding: 12px 22px;
-  border: none;
-  border-radius: 50px;
-  color: #fff;
-  font-weight: 600;
 }
 
-.dark-button {
-  background: #141a33;
+.copy-button {
+  margin-bottom: var(--sp-5);
 }
 
-.green-button {
-  background: #0b7a4b;
-}
-
-.lobby-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.lobby-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.lobby-heading h2 {
-  margin: 0;
+.leave-button {
+  margin-top: auto;
 }
 
 .member-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 0;
-  border-bottom: 1px solid #e3e5ec;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-control);
+  background: var(--wb-surface-2);
+}
+
+.host-icon {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--wb-amber-ink);
 }
 
 .member-details {
   display: flex;
   flex-direction: column;
   flex: 1;
-  color: #141a33;
+  min-width: 0;
+  color: var(--wb-ink);
+  overflow-wrap: anywhere;
 }
 
 .member-details span {
-  color: #4a5068;
-  font-size: 0.85rem;
+  color: var(--wb-text-2);
+  font-size: var(--fs-small);
 }
 
 .waiting-box {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin: 24px 0;
-  padding: 28px 16px;
-  border-radius: 12px;
-  background: #f6f8fb;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 var(--sp-5);
+  padding: var(--sp-5) var(--sp-4);
+  border-radius: var(--r-control);
+  background: var(--wb-surface-2);
   text-align: center;
-  color: #4a5068;
+  color: var(--wb-text-2);
 }
 
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--wb-ink);
+  overflow-wrap: anywhere;
+}
+
+.member-list .bi {
+  margin-right: var(--sp-1);
+  color: var(--wb-text-2);
+}
+
+.lobby-card .spin-hint {
+  margin: 0 0 var(--sp-2);
+  color: var(--wb-muted);
+  font-size: var(--fs-small);
+}
+
+.lobby-card .spin-hint + .lobby-button,
+.lobby-card .waiting-box + .lobby-button {
+  margin-top: auto;
+}
 </style>

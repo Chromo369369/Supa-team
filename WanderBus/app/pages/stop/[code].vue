@@ -7,23 +7,37 @@
     definePageMeta( {middleware: 'auth' })
 
     const route = useRoute()
+    const router = useRouter()
+    const toast = useToast()
+    const { confirm } = useConfirm()
     // not awaited, so the page shows a loading state while the places load
     // ?prefer= is the activity filter from the spin, so those places are ranked first
     const { data, status, error, refresh } = useFetch(() => `/api/stops/${route.params.code}/places`, {
         query: { prefer: computed(() => route.query.prefer) }
     })
 
+    const tabs = [
+        { key: 'all', label: 'All' },
+        { key: 'places', label: 'Places' },
+        { key: 'activities', label: 'Activities' }
+    ]
     const tab = ref('all')                // all | places | activities
     const selectedSection = ref('all')    // food, nature, heritage, art, shopping
     const selectedSub = ref('all')        // cafe, park, museum... inside the selected section
     const showKinds = reactive({ signpost: true, challenge: true })   // the signposts / challenges pills
     const selectedId = ref('')            // a place id or an activity key ('signpost:12')
 
-    const { photosByPlace, loadPhotosNear, uploadPhoto } = usePlacePhotos()
-    const { activities, loadActivities, saveActivity, deleteActivity, toggleHelpful, completeChallenge } = useStopActivities()
+    const { photosByPlace, loadError: photosError, loadPhotosNear, uploadPhoto } = usePlacePhotos()
+    const { activities, loadError: activitiesError, loadActivities, saveActivity, deleteActivity, toggleHelpful, completeChallenge } = useStopActivities()
     const uploadingId = ref('')
     const busyKey = ref('')               // the signpost/challenge whose vote or completion is saving
-    const notice = ref(null)    // { type: 'success' | 'error', text }
+    const notice = ref(null)    // { type: 'success' | 'error', text }, for hints about the map itself
+
+    // ?tab=&section=&sub= keep the filters in the URL, so a reload or a shared link opens the same view
+    function fromQuery(name, allowed) {
+        let value = route.query[name]
+        return typeof value === 'string' && allowed(value) ? value : null
+    }
 
     watch(data, (value) => {
         if (value) {
@@ -33,24 +47,34 @@
             // coming from the spin ticket: open the section of the user's picks, e.g. mall -> All tab > Shopping.
             // picks from different sections (e.g. cafe + park) stay on Any, they're already ranked first there.
             // a pick's first sub-filter decides its section, so museum (museums + galleries) opens Heritage
+            // a tab/section/sub already in the URL wins over the picks
             let picks = String(route.query.prefer).split(',').filter(pick => pick in spinToSubcategories)
             let pickedSections = [...new Set(picks.map(pick => placeSubcategories[spinToSubcategories[pick][0]].section))]
-            tab.value = 'all'
-            selectedSection.value = pickedSections.length == 1 ? pickedSections[0] : 'all'
-            selectedSub.value = 'all'
+            let section = fromQuery('section', key => key === 'all' || key in placeSections)
+            tab.value = fromQuery('tab', key => tabs.some(item => item.key === key)) ?? 'all'
+            selectedSection.value = section ?? (pickedSections.length == 1 ? pickedSections[0] : 'all')
+            selectedSub.value = fromQuery('sub', key => key in placeSubcategories && placeSubcategories[key].section === selectedSection.value) ?? 'all'
         }
     }, { immediate: true })
 
+    watch([tab, selectedSection, selectedSub], ([tabKey, section, sub]) => {
+        let query = { ...route.query, section }
+        delete query.tab
+        delete query.sub
+        if (tabKey !== 'all') query.tab = tabKey
+        if (sub !== 'all') query.sub = sub
+        router.replace({ query })
+    })
+
     async function handleUpload(place, file) {
         uploadingId.value = place.id
-        notice.value = null
         try {
             const photo = await uploadPhoto(file, place, data.value.stop.code)
-            notice.value = photo.is_pioneer
-                ? { type: 'success', text: `🏅 You're the Pioneer of ${place.name}! +100 credits` }
-                : { type: 'success', text: `📷 Thanks! Your photo of ${place.name} is up.` }
+            toast.success(photo.is_pioneer
+                ? `You’re the Pioneer of ${place.name}! +100 credits`
+                : `Thanks! Your photo of ${place.name} is up.`)
         } catch (e) {
-            notice.value = { type: 'error', text: e.message }
+            toast.error(`Couldn’t upload your photo of ${place.name}. ${e.message}`, { action: { label: 'Retry', run: () => handleUpload(place, file) } })
         } finally {
             uploadingId.value = ''
         }
@@ -67,6 +91,12 @@
         for (let activity of activities.value) total.kinds[activity.kind] += 1
         return total
     })
+
+    const tabCounts = computed(() => ({
+        all: counts.value.all + activities.value.length,
+        places: counts.value.all,
+        activities: activities.value.length
+    }))
 
     // every section chip always shows, an empty one gets a "no nearby ..." message instead
     const shownSubs = computed(() => Object.keys(placeSubcategoryInfo).filter(key =>
@@ -102,6 +132,19 @@
         selectedId.value = ''
     }
 
+    // tabs: arrow keys / Home / End move between them (roving tabindex), picking as they go
+    function onTabKey(event, index) {
+        let next = null
+        if (event.key === 'ArrowRight') next = (index + 1) % tabs.length
+        else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length
+        else if (event.key === 'Home') next = 0
+        else if (event.key === 'End') next = tabs.length - 1
+        if (next === null) return
+        event.preventDefault()
+        pickTab(tabs[next].key)
+        nextTick(() => document.getElementById(`stop-tab-${tabs[next].key}`)?.focus())
+    }
+
     function pickSection(section) {
         selectedSection.value = section
         selectedSub.value = 'all'
@@ -122,6 +165,7 @@
     // draft = the pin being placed: { kind, lat, lon, editing } (editing = the signpost/challenge being edited, or null)
     const draft = ref(null)
     const saving = ref(false)
+    const saveError = ref('')
 
     function onDragStart(event, kind) {
         event.dataTransfer.setData('text/plain', kind)
@@ -131,6 +175,7 @@
     // dropped on the map, or the button was clicked (drag and drop doesn't work on phones, so the pin starts on the stop)
     function startDraft(kind, lat, lon) {
         draft.value = { kind, lat, lon, editing: null }
+        saveError.value = ''
         selectedId.value = ''
         notice.value = null
     }
@@ -142,32 +187,53 @@
 
     function editActivity(activity) {
         draft.value = { kind: activity.kind, lat: activity.lat, lon: activity.lon, editing: activity }
+        saveError.value = ''
         selectedId.value = ''
     }
 
+    function closeDraft() {
+        draft.value = null
+        saveError.value = ''
+    }
+
+    // a failed save stays inside the form (its Post button is the retry), a good one gets a toast
     async function saveDraft(fields, file) {
         saving.value = true
+        saveError.value = ''
         notice.value = null
         try {
-            const saved = await saveActivity(draft.value.kind, fields, file, draft.value.editing)
-            notice.value = { type: 'success', text: draft.value.editing ? '✏️ Changes saved.' : `${activityStyles[saved.kind].icon} Your ${saved.kind} is up!` }
+            const editing = draft.value.editing
+            const saved = await saveActivity(draft.value.kind, fields, file, editing)
+            toast.success(editing ? 'Changes saved.' : `Your ${saved.kind} is up!`)
             showKinds[saved.kind] = true
             draft.value = null
             selectedId.value = saved.key
         } catch (e) {
-            notice.value = { type: 'error', text: e.message }
+            saveError.value = e.message
         } finally {
             saving.value = false
         }
     }
 
+    function shorten(text, length = 60) {
+        return text.length > length ? `${text.slice(0, length - 1).trimEnd()}…` : text
+    }
+
     async function removeActivity(activity) {
-        if (!confirm(`Delete this ${activity.kind}?`)) return
+        const ok = await confirm({
+            title: `Delete your ${activity.kind} at ${data.value.stop.name}?`,
+            body: `“${shorten(activity.kind == 'signpost' ? activity.note : activity.title)}” will be removed for everyone.`,
+            confirmLabel: `Delete ${activity.kind}`
+        })
+        if (ok) await deleteNow(activity)
+    }
+
+    async function deleteNow(activity) {
         try {
             await deleteActivity(activity)
-            notice.value = { type: 'success', text: `🗑️ ${activityStyles[activity.kind].label} deleted.` }
+            toast.success(`${activityStyles[activity.kind].label} deleted.`)
         } catch (e) {
-            notice.value = { type: 'error', text: e.message }
+            toast.error(`Couldn’t delete your ${activity.kind}. ${e.message}`, { action: { label: 'Retry', run: () => deleteNow(activity) } })
         }
     }
 
@@ -176,7 +242,7 @@
         try {
             await toggleHelpful(signpost)
         } catch (e) {
-            notice.value = { type: 'error', text: e.message }
+            toast.error(`Couldn’t save your vote. ${e.message}`, { action: { label: 'Retry', run: () => handleHelpful(signpost) } })
         } finally {
             busyKey.value = ''
         }
@@ -184,203 +250,249 @@
 
     async function handleComplete(challenge, file) {
         busyKey.value = challenge.key
-        notice.value = null
         try {
             await completeChallenge(challenge, file)
-            notice.value = { type: 'success', text: `🏆 Challenge complete: ${challenge.title}` }
+            toast.success(`Challenge complete: “${challenge.title}”`)
         } catch (e) {
-            notice.value = { type: 'error', text: e.message }
+            toast.error(`Couldn’t complete “${challenge.title}”. ${e.message}`, { action: { label: 'Retry', run: () => handleComplete(challenge, file) } })
         } finally {
             busyKey.value = ''
         }
     }
 
-    // clicking a pin on the map scrolls its card into view
+    // clicking a pin on the map scrolls its card into view (instantly when the user prefers reduced motion)
     watch(selectedId, async (id) => {
         if (!id) return
         await nextTick()
-        document.getElementById(`place-${id}`).scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        const card = document.getElementById(`place-${id}`)
+        if (!card) return
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        card.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' })
     })
 </script>
 
 
 <template>
     <section class="container py-4 stop-page">
-        <NuxtLink to="/home" class="back-link">← Back to spin</NuxtLink>
+        <NuxtLink to="/home" class="back-link"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to spin</NuxtLink>
         <h1 class="page-title">Around this stop</h1>
 
-        <div v-if="status === 'pending'" class="stop-note">Searching for places near stop {{ route.params.code }}...</div>
+        <p v-if="status === 'pending'" class="stop-note" role="status">Finding places near stop <span class="num">{{ route.params.code }}</span>…</p>
 
-        <div v-else-if="error" class="stop-note">
-            <p>{{ error.statusCode === 404 ? 'We couldn\'t find that bus stop.' : 'Something went wrong loading places, please try again.' }}</p>
-            <button v-if="error.statusCode !== 404" class="btn-chip mt-2" @click="refresh()">Try again</button>
+        <div v-else-if="error" class="load-error" role="alert">
+            <p class="mb-0">{{ error.statusCode === 404 ? 'We couldn’t find that bus stop, so head back and spin again.' : 'We couldn’t load the places near this stop.' }}</p>
+            <button v-if="error.statusCode !== 404" type="button" class="btn-wb btn-wb-secondary btn-sm" @click="refresh()">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Retry
+            </button>
         </div>
 
         <template v-else-if="data">
             <div class="stop-banner">
-                🚏 You're exploring around <strong>{{ data.stop.name }}</strong> ({{ data.stop.code }}), {{ data.stop.road }}
-                <span v-if="shownPicks.length" class="d-block small mt-1">
-                    ⭐ Showing your picks first: {{ shownPicks.map(key => placeStyle(key).label).join(', ') }}
+                <p class="mb-0">
+                    <i class="bi bi-bus-front" aria-hidden="true"></i>
+                    You’re exploring around <strong>{{ data.stop.name }}</strong> (<span class="num">{{ data.stop.code }}</span>), {{ data.stop.road }}
+                </p>
+                <p v-if="shownPicks.length" class="banner-picks">
+                    <i class="bi bi-stars" aria-hidden="true"></i>
+                    Showing your picks first: {{ shownPicks.map(key => placeStyle(key).label).join(', ') }}
+                </p>
+            </div>
+
+            <div v-if="notice" class="stop-notice" :class="notice.type" :role="notice.type === 'error' ? 'alert' : 'status'">
+                <span>
+                    <i class="bi" :class="notice.type === 'error' ? 'bi-geo-alt-fill' : 'bi-check-circle-fill'" aria-hidden="true"></i>
+                    {{ notice.text }}
                 </span>
+                <button type="button" class="btn-wb-ghost notice-close" aria-label="Dismiss" @click="notice = null">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
             </div>
 
-            <div v-if="notice" class="stop-notice" :class="notice.type" role="status">
-                {{ notice.text }}
-                <button type="button" class="notice-close" aria-label="Dismiss" @click="notice = null">×</button>
+            <div class="stop-tabs" role="tablist" aria-label="What to show">
+                <button
+                    v-for="(item, index) in tabs"
+                    :id="`stop-tab-${item.key}`"
+                    :key="item.key"
+                    type="button"
+                    role="tab"
+                    class="stop-tab"
+                    :class="{ active: tab === item.key }"
+                    :aria-selected="tab === item.key ? 'true' : 'false'"
+                    aria-controls="stop-panel"
+                    :tabindex="tab === item.key ? 0 : -1"
+                    @click="pickTab(item.key)"
+                    @keydown="onTabKey($event, index)"
+                >
+                    {{ item.label }} <span class="chip-count num">{{ tabCounts[item.key] }}</span>
+                </button>
             </div>
 
-            <nav class="stop-tabs" aria-label="What to show">
-                <button class="stop-tab" :class="{ active: tab === 'all' }" @click="pickTab('all')">
-                    All <span class="chip-count">{{ counts.all + activities.length }}</span>
-                </button>
-                <button class="stop-tab" :class="{ active: tab === 'places' }" @click="pickTab('places')">
-                    Places <span class="chip-count">{{ counts.all }}</span>
-                </button>
-                <button class="stop-tab" :class="{ active: tab === 'activities' }" @click="pickTab('activities')">
-                    Activities <span class="chip-count">{{ activities.length }}</span>
-                </button>
-            </nav>
+            <div id="stop-panel" role="tabpanel" :aria-labelledby="`stop-tab-${tab}`">
+                <div class="chip-row">
+                    <div v-if="tab !== 'activities'" class="chip-group" role="group" aria-label="Kind of place">
+                        <button type="button" class="btn-chip" :class="{ active: selectedSection === 'all' }" :aria-pressed="selectedSection === 'all' ? 'true' : 'false'" @click="pickSection('all')">
+                            Any <span class="chip-count num">{{ counts.all }}</span>
+                        </button>
+                        <button
+                            v-for="(section, key) in placeSections"
+                            :key="key"
+                            type="button"
+                            class="btn-chip"
+                            :class="{ active: selectedSection === key }"
+                            :aria-pressed="selectedSection === key ? 'true' : 'false'"
+                            @click="pickSection(key)"
+                        >
+                            <i class="bi chip-icon" :class="section.icon" :style="{ color: section.colour }" aria-hidden="true"></i>
+                            {{ section.label }} <span class="chip-count num">{{ counts.sections[key] ?? 0 }}</span>
+                        </button>
+                    </div>
 
-            <div class="chip-row">
-                <template v-if="tab !== 'activities'">
-                    <button class="btn-chip" :class="{ active: selectedSection === 'all' }" @click="pickSection('all')">
-                        ✨ Any <span class="chip-count">{{ counts.all }}</span>
+                    <div v-if="tab !== 'places'" class="chip-group" role="group" aria-label="Signposts and challenges">
+                        <button
+                            v-for="(style, kind) in activityStyles"
+                            :key="kind"
+                            type="button"
+                            class="btn-chip"
+                            :class="{ active: showKinds[kind] }"
+                            :aria-pressed="showKinds[kind] ? 'true' : 'false'"
+                            @click="toggleKind(kind)"
+                        >
+                            <i class="bi chip-icon" :class="style.icon" :style="{ color: style.text }" aria-hidden="true"></i>
+                            {{ style.label }}s <span class="chip-count num">{{ counts.kinds[kind] }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- more specific filters inside the chosen section, only worth showing when there's more than one -->
+                <div v-if="tab !== 'activities' && selectedSection !== 'all' && shownSubs.length > 1" class="chip-row sub-chip-row" role="group" :aria-label="`Kind of ${placeSections[selectedSection].label.toLowerCase()}`">
+                    <button type="button" class="btn-chip btn-sub" :class="{ active: selectedSub === 'all' }" :aria-pressed="selectedSub === 'all' ? 'true' : 'false'" @click="pickSub('all')">
+                        All {{ placeSections[selectedSection].label.toLowerCase() }} <span class="chip-count num">{{ counts.sections[selectedSection] }}</span>
                     </button>
                     <button
-                        v-for="(section, key) in placeSections"
+                        v-for="key in shownSubs"
                         :key="key"
-                        class="btn-chip"
-                        :class="{ active: selectedSection === key }"
-                        @click="pickSection(key)"
+                        type="button"
+                        class="btn-chip btn-sub"
+                        :class="{ active: selectedSub === key }"
+                        :aria-pressed="selectedSub === key ? 'true' : 'false'"
+                        @click="pickSub(key)"
                     >
-                        <span class="chip-dot" :style="{ background: section.colour }"></span>
-                        {{ section.icon }} {{ section.label }} <span class="chip-count">{{ counts.sections[key] ?? 0 }}</span>
+                        <i class="bi" :class="placeSubcategoryInfo[key].icon" aria-hidden="true"></i>
+                        {{ placeSubcategoryInfo[key].label }} <span class="chip-count num">{{ counts.subs[key] }}</span>
                     </button>
-                </template>
+                </div>
 
-                <span v-if="tab === 'all'" class="chip-divider" aria-hidden="true"></span>
-
-                <template v-if="tab !== 'places'">
+                <!-- drag a button onto the map to drop a pin there, or click it to drop the pin on the stop -->
+                <div v-if="tab === 'activities'" class="activity-bar">
                     <button
                         v-for="(style, kind) in activityStyles"
                         :key="kind"
-                        class="btn-chip"
-                        :class="{ active: showKinds[kind] }"
-                        :aria-pressed="showKinds[kind]"
-                        @click="toggleKind(kind)"
+                        type="button"
+                        draggable="true"
+                        class="btn-drag"
+                        :class="kind === 'signpost' ? 'btn-wb-signal' : 'btn-wb-secondary'"
+                        @dragstart="onDragStart($event, kind)"
+                        @click="startDraft(kind, data.stop.lat, data.stop.lon)"
                     >
-                        {{ style.icon }} {{ style.label }}s <span class="chip-count">{{ counts.kinds[kind] }}</span>
+                        <i class="bi" :class="style.icon" aria-hidden="true"></i>
+                        {{ kind === 'signpost' ? 'Leave a signpost' : 'Set a challenge' }}
                     </button>
-                </template>
-            </div>
+                    <span class="drag-hint">Drag a button onto the map to drop your pin inside the circle, or tap it to start at the stop.</span>
+                </div>
 
-            <!-- more specific filters inside the chosen section, only worth showing when there's more than one -->
-            <div v-if="tab !== 'activities' && selectedSection !== 'all' && shownSubs.length > 1" class="chip-row sub-chip-row">
-                <button class="btn-chip btn-sub" :class="{ active: selectedSub === 'all' }" @click="pickSub('all')">
-                    All {{ placeSections[selectedSection].label.toLowerCase() }} <span class="chip-count">{{ counts.sections[selectedSection] }}</span>
-                </button>
-                <button
-                    v-for="key in shownSubs"
-                    :key="key"
-                    class="btn-chip btn-sub"
-                    :class="{ active: selectedSub === key }"
-                    @click="pickSub(key)"
-                >
-                    {{ placeSubcategoryInfo[key].icon }} {{ placeSubcategoryInfo[key].label }} <span class="chip-count">{{ counts.subs[key] }}</span>
-                </button>
-            </div>
-
-            <!-- drag a button onto the map to drop a pin there, or click it to drop the pin on the stop -->
-            <div v-if="tab === 'activities'" class="activity-bar">
-                <button
-                    v-for="(style, kind) in activityStyles"
-                    :key="kind"
-                    type="button"
-                    draggable="true"
-                    class="btn-drag"
-                    :class="kind"
-                    @dragstart="onDragStart($event, kind)"
-                    @click="startDraft(kind, data.stop.lat, data.stop.lon)"
-                >
-                    {{ style.icon }} {{ kind === 'signpost' ? 'Leave a signpost' : 'Set a challenge' }}
-                </button>
-                <span class="drag-hint">Drag onto the map to pin it inside the circle</span>
-            </div>
-
-            <div class="stop-layout">
-                <StopMap
-                    :key="data.stop.code"
-                    :stop="data.stop"
-                    :radius="data.radius"
-                    :places="shownPlaces"
-                    :activities="shownActivities"
-                    :draft="draft"
-                    :selected-id="selectedId"
-                    @select="id => selectedId = id"
-                    @drop="startDraft"
-                    @drop-outside="notice = { type: 'error', text: '📍 Drop the pin inside the circle, within 1 km of the stop.' }"
-                    @move-draft="moveDraft"
-                />
-
-                <div class="place-list">
-                    <ActivityForm
-                        v-if="draft"
-                        :key="draft.editing ? draft.editing.key : `new-${draft.kind}`"
-                        :kind="draft.kind"
-                        :draft="draft"
+                <div class="stop-layout">
+                    <StopMap
+                        :key="data.stop.code"
                         :stop="data.stop"
-                        :existing="draft.editing"
-                        :saving="saving"
-                        @save="saveDraft"
-                        @cancel="draft = null"
+                        :radius="data.radius"
+                        :places="shownPlaces"
+                        :activities="shownActivities"
+                        :draft="draft"
+                        :selected-id="selectedId"
+                        @select="id => selectedId = id"
+                        @drop="startDraft"
+                        @drop-outside="notice = { type: 'error', text: 'Drop the pin inside the circle, within 1 km of the stop.' }"
+                        @move-draft="moveDraft"
                     />
 
-                    <template v-if="tab !== 'activities'">
-                        <div v-if="counts.all === 0" class="empty-state">
-                            <p class="empty-title">🧭 Uncharted territory</p>
+                    <div class="place-list">
+                        <ActivityForm
+                            v-if="draft"
+                            :key="draft.editing ? draft.editing.key : `new-${draft.kind}`"
+                            :kind="draft.kind"
+                            :draft="draft"
+                            :stop="data.stop"
+                            :existing="draft.editing"
+                            :saving="saving"
+                            :error="saveError"
+                            @save="saveDraft"
+                            @cancel="closeDraft"
+                        />
+
+                        <!-- a part of the page that failed to load says so here, with a retry -->
+                        <div v-if="tab !== 'activities' && photosError" class="load-error" role="alert">
+                            <p class="mb-0">Couldn’t load the photos for these places.</p>
+                            <button type="button" class="btn-wb btn-wb-secondary btn-sm" @click="loadPhotosNear(data.stop, data.radius)">
+                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Retry
+                            </button>
+                        </div>
+                        <div v-if="tab !== 'places' && activitiesError" class="load-error" role="alert">
+                            <p class="mb-0">Couldn’t load the signposts and challenges at this stop.</p>
+                            <button type="button" class="btn-wb btn-wb-secondary btn-sm" @click="loadActivities(data.stop)">
+                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Retry
+                            </button>
+                        </div>
+
+                        <template v-if="tab !== 'activities'">
+                            <div v-if="counts.all === 0" class="empty-state">
+                                <i class="bi bi-compass empty-icon" aria-hidden="true"></i>
+                                <p class="empty-title">Uncharted territory</p>
+                                <p class="stop-note">
+                                    Nothing’s on the map within a <span class="num">{{ walkMinutes(data.radius) }} min</span> walk of this stop yet.
+                                    Have a wander and see what you find.
+                                </p>
+                            </div>
+                            <div v-else-if="shownPlaces.length === 0" class="empty-state">
+                                <i class="bi empty-icon" :class="placeSections[selectedSection].icon" aria-hidden="true"></i>
+                                <p class="empty-title">Nothing here yet</p>
+                                <p class="stop-note">We didn’t find any {{ placeSections[selectedSection].label.toLowerCase() }} places near this stop.</p>
+                            </div>
+                        </template>
+
+                        <div v-if="tab === 'activities' && shownActivities.length === 0 && !draft && !activitiesError" class="empty-state">
+                            <i class="bi bi-signpost-2 empty-icon" aria-hidden="true"></i>
+                            <p class="empty-title">No signposts or challenges yet</p>
                             <p class="stop-note">
-                                Nothing's been mapped within a {{ walkMinutes(data.radius) }} min walk of this stop yet.
-                                Have a wander, you might find something nobody has listed!
+                                {{ showKinds.signpost || showKinds.challenge
+                                    ? 'Tap “Leave a signpost” or “Set a challenge” above, or drag one onto the map, to add the first.'
+                                    : 'Turn on Signposts or Challenges above to see them.' }}
                             </p>
                         </div>
-                        <div v-else-if="shownPlaces.length === 0" class="empty-state">
-                            <p class="empty-title">{{ placeSections[selectedSection].icon }} Nothing here yet</p>
-                            <p class="stop-note">There are no nearby {{ placeSections[selectedSection].label.toLowerCase() }} places around this stop.</p>
-                        </div>
-                    </template>
 
-                    <div v-if="tab === 'activities' && shownActivities.length === 0 && !draft" class="empty-state">
-                        <p class="empty-title">🪧 No signposts or challenges yet</p>
-                        <p class="stop-note">
-                            {{ showKinds.signpost || showKinds.challenge
-                                ? 'Be the first! Drag "Leave a signpost" or "Set a challenge" onto the map.'
-                                : 'Turn on Signposts or Challenges above to see them.' }}
-                        </p>
+                        <template v-for="item in listItems" :key="item.kind ? item.key : item.id">
+                            <ActivityCard
+                                v-if="item.kind"
+                                :activity="item"
+                                :selected="item.key === selectedId"
+                                :busy="busyKey === item.key"
+                                @select="id => selectedId = id"
+                                @edit="editActivity"
+                                @delete="removeActivity"
+                                @helpful="handleHelpful"
+                                @complete="handleComplete"
+                            />
+                            <PlaceCard
+                                v-else
+                                :place="item"
+                                :stop="data.stop"
+                                :selected="item.id === selectedId"
+                                :photos="photosByPlace[item.id]"
+                                :uploading="uploadingId === item.id"
+                                @select="id => selectedId = id"
+                                @upload="handleUpload"
+                            />
+                        </template>
                     </div>
-
-                    <template v-for="item in listItems" :key="item.kind ? item.key : item.id">
-                        <ActivityCard
-                            v-if="item.kind"
-                            :activity="item"
-                            :selected="item.key === selectedId"
-                            :busy="busyKey === item.key"
-                            @select="id => selectedId = id"
-                            @edit="editActivity"
-                            @delete="removeActivity"
-                            @helpful="handleHelpful"
-                            @complete="handleComplete"
-                        />
-                        <PlaceCard
-                            v-else
-                            :place="item"
-                            :stop="data.stop"
-                            :selected="item.id === selectedId"
-                            :photos="photosByPlace[item.id]"
-                            :uploading="uploadingId === item.id"
-                            @select="id => selectedId = id"
-                            @upload="handleUpload"
-                        />
-                    </template>
                 </div>
             </div>
         </template>
@@ -389,122 +501,212 @@
 
 <style scoped>
 .page-title {
-  font-size: 2.4rem;
-  font-weight: 800;
-  color: #141a33;
-  margin-bottom: 16px;
+  font-size: var(--fs-title);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--sp-4);
 }
 
 .back-link {
-  display: inline-block;
-  color: #4a5068;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  color: var(--wb-text-2);
   text-decoration: none;
-  font-size: 0.9rem;
-  margin-bottom: 8px;
+  font-size: var(--fs-small);
+  margin-bottom: var(--sp-1);
+}
+
+.back-link:hover {
+  color: var(--wb-ink);
+  text-decoration: underline;
 }
 
 .stop-note {
-  color: #4a5068;
-  padding: 24px 0;
+  color: var(--wb-text-2);
+  padding: var(--sp-5) 0;
+  margin: 0;
 }
 
 .stop-banner {
-  background: #fdf3d7;
-  color: #7a5200;
-  border-radius: 10px;
-  padding: 10px 14px;
-  margin-bottom: 16px;
+  background: var(--wb-amber-tint);
+  color: var(--wb-amber-ink);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+.banner-picks {
+  font-size: var(--fs-small);
+  margin: var(--sp-1) 0 0;
 }
 
 .stop-notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  border-radius: 10px;
-  padding: 10px 14px;
-  margin-bottom: 16px;
-  font-weight: 600;
+  gap: var(--sp-3);
+  border-radius: var(--r-control);
+  padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-4);
+  margin-bottom: var(--sp-4);
+  font-weight: 500;
 }
 
 .stop-notice.success {
-  background: #e6f4ec;
-  color: #0b7a4b;
+  background: var(--wb-green-tint);
+  color: var(--wb-green);
 }
 
 .stop-notice.error {
-  background: #fdecea;
-  color: #b3261e;
+  background: var(--wb-danger-bg);
+  color: var(--wb-danger);
 }
 
+/* 44px dismiss, in the notice's own colour */
 .notice-close {
+  flex-shrink: 0;
+  width: 44px;
+  padding: 0;
+  color: inherit;
+}
+
+.notice-close:hover {
+  background: var(--wb-surface);
+  color: inherit;
+}
+
+/* a block that failed to load: one sentence and a retry */
+.load-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  background: var(--wb-danger-bg);
+  color: var(--wb-danger);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  flex-shrink: 0;
+}
+
+.load-error .btn-wb-secondary {
+  background: var(--wb-surface);
+}
+
+/* All | Places | Activities: pill tabs on a tone track */
+.stop-tabs {
+  display: inline-flex;
+  max-width: 100%;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  background: var(--wb-surface-2);
+  border-radius: var(--r-pill);
+  margin-bottom: var(--sp-4);
+}
+
+.stop-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 44px;
+  padding: 0 var(--sp-4);
   background: none;
   border: none;
-  color: inherit;
-  font-size: 1.3rem;
-  line-height: 1;
+  border-radius: var(--r-pill);
+  font-weight: 500;
+  color: var(--wb-text-2);
+  white-space: nowrap;
+  transition: background-color var(--t-micro) var(--ease), color var(--t-micro) var(--ease);
+}
+
+.stop-tab:hover {
+  color: var(--wb-ink);
+}
+
+.stop-tab.active {
+  background: var(--wb-green);
+  color: var(--wb-on-ink);
+}
+
+.stop-tab:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
 }
 
 .chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: var(--sp-2) var(--sp-5);
+  margin-bottom: var(--sp-5);
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
 }
 
 .btn-chip {
-  background: #fff;
-  border: 1px solid #c9ccd6;
-  color: #141a33;
-  border-radius: 50px;
-  padding: 6px 14px;
-  font-weight: 600;
-  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 44px;
+  background: var(--wb-surface-2);
+  border: 2px solid transparent;
+  color: var(--wb-ink);
+  border-radius: var(--r-pill);
+  padding: 0 var(--sp-4);
+  font-weight: 500;
+  font-size: var(--fs-small);
+  transition: background-color var(--t-micro) var(--ease), border-color var(--t-micro) var(--ease);
 }
 
 .btn-chip:hover {
-  background: #f1f2f6;
+  border-color: var(--wb-control);
 }
 
+/* selected = green (the selected-state colour) */
 .btn-chip.active {
-  background: #141a33;
-  border-color: #141a33;
-  color: #fff;
+  background: var(--wb-green-tint);
+  border-color: var(--wb-green);
+  color: var(--wb-ink);
+}
+
+.btn-chip:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
 }
 
 .sub-chip-row {
-  margin-top: -10px;
-  padding-left: 12px;
-  border-left: 3px solid #e3e5ec;
+  margin-top: calc(var(--sp-3) * -1);
+  padding-left: var(--sp-4);
 }
 
-.btn-sub {
-  font-size: 0.85rem;
-  padding: 4px 12px;
-}
-
-.chip-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 2px;
-  vertical-align: middle;
+.btn-sub .bi {
+  color: var(--wb-text-2);
 }
 
 .empty-state {
-  background: #fff;
-  border: 1px dashed #c9ccd6;
-  border-radius: 14px;
-  padding: 24px;
+  flex-shrink: 0;
+  background: var(--wb-surface-2);
+  border-radius: var(--r-card);
+  padding: var(--sp-5);
   text-align: center;
 }
 
+.empty-icon {
+  display: block;
+  font-size: 24px;
+  color: var(--wb-text-2);
+  margin-bottom: var(--sp-2);
+}
+
 .empty-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #141a33;
-  margin-bottom: 4px;
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  color: var(--wb-ink);
+  margin: 0 0 var(--sp-1);
 }
 
 .empty-state .stop-note {
@@ -513,51 +715,19 @@
 
 .chip-count {
   font-weight: 400;
-  opacity: 0.7;
+  opacity: 0.8;
   margin-left: 2px;
-}
-
-/* All | Places | Activities */
-.stop-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid #e3e5ec;
-  margin-bottom: 16px;
-}
-
-.stop-tab {
-  background: none;
-  border: none;
-  border-bottom: 3px solid transparent;
-  padding: 8px 16px;
-  font-weight: 700;
-  color: #4a5068;
-}
-
-.stop-tab.active {
-  color: #141a33;
-  border-bottom-color: #0b7a4b;
-}
-
-.chip-divider {
-  width: 1px;
-  align-self: stretch;
-  background: #c9ccd6;
-  margin: 2px 4px;
 }
 
 .activity-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
 }
 
 .btn-drag {
-  border-radius: 50px;
-  padding: 10px 22px;
-  font-weight: 700;
   cursor: grab;
 }
 
@@ -565,48 +735,47 @@
   cursor: grabbing;
 }
 
-.btn-drag.signpost {
-  background: #f5a623;
-  border: 1px solid #f5a623;
-  color: #141a33;
-}
-
-.btn-drag.challenge {
-  background: #fff;
-  border: 1px solid #c9ccd6;
-  color: #141a33;
-}
-
 .drag-hint {
-  font-size: 0.85rem;
-  color: #6b7085;
+  font-size: var(--fs-small);
+  color: var(--wb-muted);
 }
 
 /* map on the left, scrolling list of cards on the right */
 .stop-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-5);
   align-items: start;
 }
 
 .place-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-3);
   max-height: 520px;
   overflow-y: auto;
-  padding: 2px;
+  padding: var(--sp-1);   /* room for the selected card's outline */
 }
 
 @media (max-width: 991.98px) {
   .stop-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .place-list {
     max-height: none;
     overflow-y: visible;
+  }
+}
+
+@media (max-width: 399.98px) {
+  .stop-tab {
+    padding: 0 var(--sp-3);
+    font-size: var(--fs-small);
+  }
+
+  .sub-chip-row {
+    padding-left: 0;
   }
 }
 </style>

@@ -4,6 +4,7 @@ import SpinResults from '~/components/spin/SpinResults.vue';
 import { filterByAmens } from '~/composables/filterAmens';
 
 const { $supabase } = useNuxtApp()
+const toast = useToast()
 
 definePageMeta({ middleware: 'auth' })
 
@@ -77,10 +78,17 @@ async function update(){
 
 
     } catch (e) {
-        errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
+        errorMessage.value = typeof e === 'string' ? e : 'Your spin didn’t go through, so tap Spin again to retry.'
     }
 }
+// guards against double-clicks creating duplicate passport entries
+const savingTrip = ref(false)
+const savedTrip = ref(false)
+watch(chosenStop, () => { savedTrip.value = false })
+
 async function saveTrip(){
+        if (savingTrip.value || savedTrip.value) return
+        savingTrip.value = true
         try{
             const {data, error} = await $supabase.from('passport_entries').insert({
                 starting_stop: startDetails.value.Description,
@@ -90,14 +98,18 @@ async function saveTrip(){
                 starting_location: selectedPlace.value.ADDRESS
             })
             if(error){
-                alert(`Could not save your trip: ${error.message}`)
+                toast.error(`Couldn’t save your trip: ${error.message}`, { action: { label: 'Retry', run: saveTrip } })
                 return
             }
-            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
-            
-                
+            savedTrip.value = true
+            toast.success('Saved to your passport')
+
+
         }catch(e){
             console.log(e)
+            toast.error('Couldn’t save your trip. Check your connection and try again.', { action: { label: 'Retry', run: saveTrip } })
+        }finally{
+            savingTrip.value = false
         }
     }
 </script>
@@ -106,10 +118,7 @@ async function saveTrip(){
     <section class="container py-4 spin-page">
         <h1 class="page-title">Spin a side quest</h1>
         <p v-if="selectedPlaceTemp" class="start-line">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
-                <circle cx="12" cy="9.5" r="2.5" />
-            </svg>
+            <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
             Starting near {{ selectedPlaceTemp.ADDRESS }}
         </p>
 
@@ -135,6 +144,8 @@ async function saveTrip(){
                 :starting-stops="startingStops"
                 :preferences="preferences"
                 :amenities="amenStops.data.value ?? {}"
+                :saving="savingTrip"
+                :saved="savedTrip"
                 @reroll="reroll()"
                 @save-trip="saveTrip()"
             />
@@ -144,39 +155,41 @@ async function saveTrip(){
 
 <style scoped>
 .page-title {
-  font-size: 2.4rem;
-  font-weight: 800;
-  color: #141a33;
-  margin-bottom: 24px;
+  margin: 0 0 var(--sp-5);
+  font-size: var(--fs-title);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
 .page-title:has(+ .start-line) {
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-2);
 }
 
 .start-line {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 24px;
-  color: #141a33;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0 0 var(--sp-5);
+  color: var(--wb-text-2);
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 /* Expanded to 2 columns (340px for filters, remaining width for results) */
 .spin-layout {
   display: grid;
-  grid-template-columns: 340px 1fr;
-  gap: 32px;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--sp-6);
 }
 
 @media (max-width: 991.98px) {
   .spin-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .spin-page {
-    padding-bottom: 120px !important;
+    padding-bottom: 148px !important; /* room for the dock and its helper line */
   }
 }
 </style>

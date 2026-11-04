@@ -1,19 +1,105 @@
+/* WanderBus design tokens — see design.md §2. Components reference these only; a raw hex in a component is a bug. */
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+:root {
+  color-scheme: light;
+
+  /* grounds */
+  --wb-ground:      #f9f9fb;
+  --wb-surface:     #ffffff;
+  --wb-surface-2:   #f1f2f6;
+
+  /* text */
+  --wb-ink:         #141a33;
+  --wb-text-2:      #4a5068;
+  --wb-muted:       #6b7085;  /* on ground/surface only */
+  --wb-on-ink:      #ffffff;
+  --wb-on-ink-2:    #9aa0b8;
+
+  /* primary = action / go / selected */
+  --wb-green:       #0b7a4b;
+  --wb-green-hover: #096640;
+  --wb-green-tint:  #e3f2ea;
+
+  /* signal — amber is a FILL only, never text */
+  --wb-amber:       #f5a623;
+  --wb-amber-tint:  #fdf3d7;
+  --wb-amber-ink:   #7a5200;
+  --wb-amber-hover: #e6981a;
+
+  /* lines */
+  --wb-control:     #80869a;
+  --wb-line:        #e3e5ec;
+
+  /* status */
+  --wb-danger:      #b42318;
+  --wb-danger-bg:   #fdecea;
+  --wb-danger-hover: #911b12;
+  --wb-success:     var(--wb-green);
+  --wb-disabled-bg: #e3e5ec;
+  --wb-disabled-fg: #6b7085;
+
+  /* elevation — floating things only */
+  --wb-float: 0 12px 32px rgba(20, 26, 51, .14);
+  --wb-lift:  0 6px 16px rgba(20, 26, 51, .18);
+
+  /* map categories (§2.1) */
+  --cat-food: #b8381f;      --cat-food-tint: #fdecea;
+  --cat-nature: #2e9e3f;    --cat-nature-tint: #e4f7e8;
+  --cat-heritage: #3b6fa0;  --cat-heritage-tint: #e8eff7;
+  --cat-art: #b5307a;       --cat-art-tint: #fbeaf3;
+  --cat-shopping: #b8860b;  --cat-shopping-tint: #fbf1da;
+  --cat-challenge: #1f5fbf; --cat-challenge-tint: #e8f0fc;
+
+  /* type */
+  --font-display: "Fredoka", "Lexend Deca", system-ui, sans-serif;
+  --font-ui:      "Lexend Deca", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-hand:    "Caveat", "Comic Sans MS", cursive;
+  --bs-body-font-family: var(--font-ui);
+  --bs-body-color: var(--wb-ink);
+  --bs-body-bg: var(--wb-ground);
+
+  --fs-meta:  0.75rem;
+  --fs-small: 0.875rem;
+  --fs-body:  1rem;
+  --fs-lead:  1.25rem;
+  --fs-title: 1.75rem;
+  --fs-hero:  clamp(2.75rem, 1.5rem + 5vw, 5rem);
+
+  /* space, radius, layout */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px; --sp-5: 24px;
+  --sp-6: 32px; --sp-7: 48px; --sp-8: 64px; --sp-9: 96px;
+  --r-card: 16px;  --r-control: 12px;  --r-pill: 999px;
+  --gutter: clamp(16px, 4vw, 32px);
+  --header-h: 64px;
+
+  /* motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-micro: 150ms;  --t-ui: 250ms;  --t-reveal: 420ms;  --t-signature: 1200ms;
 }
+
+html { scroll-padding-top: calc(var(--header-h) + 8px); }
 
 body {
-  font-family: sans-serif;
-  background-color: #f9f9f9;
+  font: 400 var(--fs-body)/1.5 var(--font-ui);
+  color: var(--wb-ink);
+  background: var(--wb-ground);
 }
+
+h1, h2, .display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--wb-ink);
+  text-wrap: balance;
+}
+
+.num  { font-variant-numeric: tabular-nums; }
+.hand { font-family: var(--font-hand); font-size: 1.375rem; line-height: 1.25; }
 
 .app-layout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 main {
@@ -21,26 +107,146 @@ main {
   padding: 20px;
 }
 
+/* skip link — first focusable element (layouts/default.vue) */
+.skip-link {
+  position: absolute;
+  left: var(--sp-4);
+  top: -100px;
+  z-index: 2000;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-control);
+  background: var(--wb-ink);
+  color: var(--wb-on-ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+.skip-link:focus { top: var(--sp-2); outline: 3px solid var(--wb-amber); outline-offset: 2px; }
+
+/* ── Buttons: one set, shared (§2.4). Use as class="btn-wb btn-wb-primary" (Bootstrap .btn alongside is fine). ── */
+.btn-wb,
+.btn-wb-primary,
+.btn-wb-secondary,
+.btn-wb-signal,
+.btn-wb-ghost,
+.btn-wb-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 20px;
+  border: 2px solid transparent;
+  border-radius: var(--r-pill);
+  font: 500 var(--fs-body)/1 var(--font-ui);
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform var(--t-micro) var(--ease), background-color var(--t-micro) var(--ease), color var(--t-micro) var(--ease);
+}
+.btn-wb:hover, .btn-wb-primary:hover, .btn-wb-secondary:hover, .btn-wb-signal:hover, .btn-wb-ghost:hover, .btn-wb-danger:hover { transform: translateY(-1px); }
+.btn-wb:active, .btn-wb-primary:active, .btn-wb-secondary:active, .btn-wb-signal:active, .btn-wb-ghost:active, .btn-wb-danger:active { transform: scale(.97); }
+.btn-wb:focus-visible, .btn-wb-primary:focus-visible, .btn-wb-secondary:focus-visible, .btn-wb-signal:focus-visible, .btn-wb-ghost:focus-visible, .btn-wb-danger:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 3px;
+  box-shadow: none; /* taste-skill-ignore: clears Bootstrap's focus glow, not a shadow */
+}
+.btn-wb.btn-lg, .btn-wb-primary.btn-lg, .btn-wb-secondary.btn-lg, .btn-wb-signal.btn-lg { min-height: 52px; padding: 0 var(--sp-5); font-size: var(--fs-lead); }
+.btn-wb.btn-sm, .btn-wb-primary.btn-sm, .btn-wb-secondary.btn-sm, .btn-wb-signal.btn-sm, .btn-wb-ghost.btn-sm, .btn-wb-danger.btn-sm { min-height: 44px; padding: 0 var(--sp-3); font-size: var(--fs-small); }
+
+.btn-wb-primary { background: var(--wb-green); color: #fff; }
+.btn-wb-primary:hover { background: var(--wb-green-hover); color: #fff; }
+
+.btn-wb-secondary { background: transparent; border-color: var(--wb-ink); color: var(--wb-ink); }
+.btn-wb-secondary:hover { background: var(--wb-surface-2); color: var(--wb-ink); }
+
+.btn-wb-signal { background: var(--wb-amber); color: var(--wb-ink); }
+.btn-wb-signal:hover { background: var(--wb-amber-hover); color: var(--wb-ink); }
+
+.btn-wb-ghost { background: transparent; color: var(--wb-text-2); }
+.btn-wb-ghost:hover { background: var(--wb-surface-2); color: var(--wb-ink); }
+
+.btn-wb-danger { background: var(--wb-danger); color: #fff; }
+.btn-wb-danger:hover { background: var(--wb-danger-hover); color: #fff; }
+
+.btn-wb:disabled, .btn-wb-primary:disabled, .btn-wb-secondary:disabled, .btn-wb-signal:disabled, .btn-wb-ghost:disabled, .btn-wb-danger:disabled,
+.btn-wb.disabled, .btn-wb-primary.disabled, .btn-wb-secondary.disabled, .btn-wb-signal.disabled {
+  background: var(--wb-disabled-bg);
+  border-color: transparent;
+  color: var(--wb-disabled-fg);
+  transform: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.btn-wb-ghost:disabled { background: transparent; }
+
+/* busy: keep width, show a spinner before the "verb-ing…" label */
+[aria-busy="true"].btn-wb, [aria-busy="true"].btn-wb-primary, [aria-busy="true"].btn-wb-secondary { cursor: progress; }
+button[aria-busy="true"]::before,
+a[aria-busy="true"]::before {
+  content: "";
+  width: 1em; height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: wb-spin .7s linear infinite;
+}
+@keyframes wb-spin { to { transform: rotate(360deg); } }
+
+/* form controls: 3:1 edge (WCAG 1.4.11) and a real focus ring */
+.form-control,
+.form-select {
+  --bs-border-color: var(--wb-control);
+  border-color: var(--wb-control);
+  border-radius: var(--r-control);
+  min-height: 44px;
+  color: var(--wb-ink);
+}
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--wb-green);
+  outline: 3px solid var(--wb-green);
+  outline-offset: 1px;
+  box-shadow: none; /* taste-skill-ignore: clears Bootstrap's focus glow */
+}
+.form-check-input { border-color: var(--wb-control); }
+.form-check-input:checked { background-color: var(--wb-green); border-color: var(--wb-green); }
+
+/* inline form errors (§2.5) */
+.wb-field-error {
+  margin-top: var(--sp-1);
+  color: var(--wb-danger);
+  font-size: var(--fs-small);
+}
+.form-control[aria-invalid="true"] { border-color: var(--wb-danger); }
 
 /* landing page */
 .section-white {
-  background: #fff;
-  border-top: 1px solid #e3e5ec;
-  border-bottom: 1px solid #e3e5ec;
+  background: var(--wb-surface);
 }
 
 .section-title {
-  font-size: 2.4rem;
-  font-weight: 800;
-  color: #141a33;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--wb-ink);
 }
 
 .hero-text {
-  font-size: 1.1rem;
-  color: #4a5068;
+  font-size: var(--fs-lead);
+  color: var(--wb-text-2);
 }
 
 .small-note {
-  font-size: 0.85rem;
-  color: #6b7085;
+  font-size: var(--fs-small);
+  color: var(--wb-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }

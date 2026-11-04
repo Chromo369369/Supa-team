@@ -10,6 +10,8 @@ import { categoryInfo } from '~/utils/spinCategories';
 
 const props = defineProps({
     submitted: Boolean,
+    saving: Boolean,
+    saved: Boolean,
     errorMessage: String,
     chosenStop: [Object, String],
     stopDetails: [Object, String],
@@ -60,49 +62,51 @@ const nearby = computed(() => {
     return places.slice(0, 6)
 })
 
+// `label` is the plain-text sign; LedBoard announces it only when the state changes, not on every flip.
 const board = computed(() => {
-    if (!props.submitted) return { badge: '??', messages: [['READY WHEN', 'YOU ARE'], ['SOMEWHERE NEW', 'ANY BUS, ANY STOP']] }
-    if (props.errorMessage) return { badge: '??', messages: [['NO TRIPS', 'TRY AGAIN']] }
-    if (!props.chosenStop) return { badge: '??', messages: [['FINDING YOUR', 'NEXT STOP']] }
-    if (!torn.value) return { badge: '??', messages: [['YOUR TICKET', 'IS READY'], ['TEAR THE STUB', 'TO SEE WHERE']] }
+    if (!props.submitted) return { badge: '??', label: 'Ready when you are', messages: [['READY WHEN', 'YOU ARE'], ['SOMEWHERE NEW', 'ANY BUS, ANY STOP']] }
+    if (props.errorMessage) return { badge: '??', label: 'No trips found', messages: [['NO TRIPS', 'TRY AGAIN']] }
+    if (!props.chosenStop) return { badge: '??', label: 'Finding your next stop', messages: [['FINDING YOUR', 'NEXT STOP']] }
+    if (!torn.value) return { badge: '??', label: 'Your ticket is ready', messages: [['YOUR TICKET', 'IS READY'], ['TEAR THE STUB', 'TO SEE WHERE']] }
     const destination = props.stopDetails.Description.toUpperCase()
     const road = props.stopDetails.RoadName.toUpperCase()
     // Like the front of a real bus: service number on the left, destination on the right.
     return trip.value.bus
-        ? { badge: trip.value.bus, messages: [[destination, road]] }
-        : { badge: '>>', messages: [['WALK TO', destination]] }
+        ? { badge: trip.value.bus, label: `Bus ${trip.value.bus} to ${props.stopDetails.Description}, ${props.stopDetails.RoadName}`, messages: [[destination, road]] }
+        : { badge: '>>', label: `Walk to ${props.stopDetails.Description}`, messages: [['WALK TO', destination]] }
 })
 </script>
 
 <template>
     <section class="results">
-        <LedBoard :badge="board.badge" :messages="board.messages" class="results-board" />
+        <LedBoard :badge="board.badge" :messages="board.messages" :label="board.label" class="results-board" />
 
         <div class="results-body">
             <div v-if="!submitted" class="idle">
-                <div class="ghost" aria-hidden="true"></div>
-                <p class="results-note">Set your filters and spin. Your ticket shows a ride time; tear it to find out where you're going.</p>
+                <div class="ghost" aria-hidden="true"><i class="bi bi-ticket-perforated"></i></div>
+                <p class="results-note">Set your filters and spin. Your ticket shows a ride time; tear it to find out where you’re going.</p>
             </div>
 
             <div v-else-if="errorMessage" class="idle" role="alert">
-                <p class="results-error">{{ errorMessage }}</p>
+                <p class="results-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errorMessage }}</p>
             </div>
 
             <div v-else-if="!chosenStop" class="idle" aria-live="polite">
-                <div class="ghost ghost--loading" aria-hidden="true"></div>
+                <div class="ghost ghost--loading" aria-hidden="true"><i class="bi bi-bus-front"></i></div>
                 <p class="results-note">Checking live buses near you…</p>
             </div>
 
             <template v-else>
                 <p class="reveal-head" aria-live="polite">
                     <template v-if="!torn">Your ticket is ready. Drag the stub to tear it, or focus it and press Enter.</template>
-                    <template v-else>Here's your side quest. Head out, or spin again for a new ticket.</template>
+                    <template v-else>Here’s your side quest. Head out, or spin again for a new ticket.</template>
                 </p>
 
                 <div class="reveal" :class="{ 'is-torn': torn }">
                     <SpinTicket
                         :key="ticketKey"
-                        icon="🚌"
+                        icon="bi-bus-front"
+                        :heading-level="2"
                         title="Mystery stop"
                         subtitle="A random stop within your travel time"
                         :travel-time="totalMin"
@@ -122,34 +126,34 @@ const board = computed(() => {
 
                         <ol class="legs">
                             <li>
-                                <span class="leg-icon" aria-hidden="true">🚶</span>
+                                <span class="leg-icon" aria-hidden="true"><i class="bi bi-person-walking"></i></span>
                                 <div v-if="trip.bus">
-                                    <p class="leg">Walk {{ walkM }} m to {{ startDetails.Description }}</p>
+                                    <p class="leg">Walk <span class="num">{{ walkM }}</span> m to {{ startDetails.Description }}</p>
                                     <p class="leg-sub">
-                                        Stop {{ trip.boardAt }}, {{ startDetails.RoadName }}. About {{ walkMin }} min.
+                                        Stop <span class="num">{{ trip.boardAt }}</span>, {{ startDetails.RoadName }}. About <span class="num">{{ walkMin }}</span> min.
                                         <a :href="walkingLink" target="_blank" rel="noopener noreferrer">Walking directions<span class="visually-hidden"> (opens Google Maps)</span></a>
                                     </p>
                                 </div>
                                 <div v-else>
-                                    <p class="leg">Walk about {{ walkMin }} min</p>
-                                    <p class="leg-sub">No bus needed, this one is close by.</p>
+                                    <p class="leg">Walk about <span class="num">{{ walkMin }}</span> min</p>
+                                    <p class="leg-sub">No bus needed. It’s close enough to walk.</p>
                                 </div>
                             </li>
                             <template v-if="trip.bus">
                                 <li>
-                                    <span class="leg-icon" aria-hidden="true">🚌</span>
-                                    <div><p class="leg">Board bus {{ trip.bus }}</p></div>
+                                    <span class="leg-icon" aria-hidden="true"><i class="bi bi-bus-front"></i></span>
+                                    <div><p class="leg">Board bus <span class="num">{{ trip.bus }}</span></p></div>
                                 </li>
                                 <li>
-                                    <span class="leg-icon" aria-hidden="true">🛣️</span>
-                                    <div><p class="leg">Ride {{ trip.stops }} stops</p></div>
+                                    <span class="leg-icon" aria-hidden="true"><i class="bi bi-arrow-down"></i></span>
+                                    <div><p class="leg">Ride <span class="num">{{ trip.stops }}</span> stops</p></div>
                                 </li>
                             </template>
                             <li>
-                                <span class="leg-icon" aria-hidden="true">🏁</span>
+                                <span class="leg-icon leg-icon--arrive" aria-hidden="true"><i class="bi bi-flag-fill"></i></span>
                                 <div>
                                     <p class="leg">{{ trip.bus ? 'Get off at' : 'Arrive at' }} {{ stopDetails.Description }}</p>
-                                    <p class="leg-sub">Stop {{ chosenStop.destination }}, {{ stopDetails.RoadName }}</p>
+                                    <p class="leg-sub">Stop <span class="num">{{ chosenStop.destination }}</span>, {{ stopDetails.RoadName }}</p>
                                 </div>
                             </li>
                         </ol>
@@ -162,24 +166,27 @@ const board = computed(() => {
                         <h3 class="nearby-title">Within 1 km of the stop</h3>
                         <ul class="nearby">
                             <li v-for="place in nearby" :key="place.name">
-                                <span aria-hidden="true">{{ categoryInfo(place.category).emoji }}</span>
+                                <i :class="['bi', categoryInfo(place.category).icon]" aria-hidden="true"></i>
                                 {{ place.name }}
                                 <span class="visually-hidden">({{ categoryInfo(place.category).label }})</span>
                             </li>
                         </ul>
                     </div>
 
-                    <p class="quest-time">Total travel time: about <strong>{{ totalMin }} min</strong></p>
+                    <p class="quest-time"><i class="bi bi-stopwatch" aria-hidden="true"></i> Total travel time: about <strong class="num">{{ totalMin }} min</strong></p>
 
                     <div class="actions">
                         <NuxtLink
                             :to="{ path: `/stop/${chosenStop.destination}`, query: { prefer: preferences.join(',') } }"
-                            class="btn btn-explore"
+                            class="btn btn-wb-primary"
                         >
-                            Explore places around this stop
+                            Explore this stop
                         </NuxtLink>
-                        <button type="button" class="btn btn-wb-outline" @click="$emit('reroll')">Spin again</button>
-                        <SpinSubmit :submitted="true" @save-trip="$emit('saveTrip')" />
+                        <button type="button" class="btn btn-wb-secondary" @click="$emit('reroll')">
+                            <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                            Spin again
+                        </button>
+                        <SpinSubmit :submitted="true" :saving="saving" :saved="saved" @save-trip="$emit('saveTrip')" />
                     </div>
                 </template>
             </template>
@@ -188,10 +195,10 @@ const board = computed(() => {
 </template>
 
 <style scoped>
+/* The stage is one flat surface; no outline, no dotted grid (design.md §1). */
 .results {
-  background: #fff;
-  border: 1px solid #e3e5ec;
-  border-radius: 16px;
+  background: var(--wb-surface);
+  border-radius: var(--r-card);
   overflow: hidden;
 }
 
@@ -201,52 +208,61 @@ const board = computed(() => {
 
 .results-body {
   min-height: 22rem;
-  padding: 24px;
-  background-color: #f9f9fb;
-  background-image: radial-gradient(#e3e5ec 1px, transparent 1px);
-  background-size: 22px 22px;
+  padding: var(--sp-5);
 }
 
 @media (min-width: 992px) {
   .results-body {
     min-height: 34rem;
-    padding: 32px;
+    padding: var(--sp-6);
   }
 }
 
 .results-note {
   max-width: 28rem;
-  color: #4a5068;
+  margin: 0;
+  color: var(--wb-text-2);
 }
 
 .results-error {
-  color: #b42318;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-control);
+  background: var(--wb-danger-bg);
+  color: var(--wb-danger);
+  font-weight: 500;
 }
 
-/* Before a spin: a dashed outline where the ticket will appear */
+/* Before a spin: a placeholder ticket where the real one will appear (Tier 1 swaps in the parked bus) */
 .idle {
   display: grid;
   justify-items: center;
   gap: 20px;
-  padding-block: 32px;
+  padding-block: var(--sp-6);
   text-align: center;
 }
 
 .ghost {
+  display: grid;
+  place-items: center;
   width: 96px;
   height: 140px;
-  border: 2px dashed #c9ccd6;
   border-radius: 14px;
-  background: linear-gradient(180deg, transparent 72%, #e3e5ec 72% 73%, transparent 73%);
+  background: var(--wb-surface-2);
+  color: var(--wb-muted);
+  font-size: 1.5rem; /* 24px empty-state icon (design.md §2.6) */
 }
 
+/* Searching: a gentle bob, transform and opacity only */
 .ghost--loading {
-  animation: ghost-bob 1.2s ease-in-out infinite;
+  animation: ghost-bob 1.2s var(--ease) infinite;
 }
 
 @keyframes ghost-bob {
-  50% { transform: translateY(-8px); border-color: #0b7a4b; }
+  50% { transform: translateY(-8px); opacity: 0.7; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -254,22 +270,22 @@ const board = computed(() => {
 }
 
 .reveal-head {
-  margin-bottom: 20px;
-  color: #4a5068;
+  margin: 0 0 20px;
+  color: var(--wb-text-2);
   text-align: center;
 }
 
 /* One ticket centred; once torn it moves left and the trip steps appear beside it */
 .reveal {
   display: grid;
-  gap: 24px;
+  gap: var(--sp-5);
   justify-items: center;
 }
 
 @media (min-width: 992px) {
   .reveal.is-torn {
     grid-template-columns: 272px minmax(0, 1fr);
-    gap: 32px;
+    gap: var(--sp-6);
     align-items: start;
     justify-items: stretch;
   }
@@ -277,9 +293,9 @@ const board = computed(() => {
 
 .preview {
   display: grid;
-  gap: 16px;
+  gap: var(--sp-4);
   width: 100%;
-  animation: preview-in 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: preview-in var(--t-reveal) var(--ease);
 }
 
 @keyframes preview-in {
@@ -287,24 +303,31 @@ const board = computed(() => {
   to { opacity: 1; transform: none; }
 }
 
-.quest-title {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: #141a33;
+@media (prefers-reduced-motion: reduce) {
+  .preview { animation: none; }
 }
 
-/* Trip steps joined by a line */
+.quest-title {
+  margin: 0;
+  font-size: var(--fs-title);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+/* Trip steps joined by a line (the route, not a divider) */
 .legs {
   list-style: none;
   display: grid;
+  margin: 0;
+  padding: 0;
 }
 
 .legs li {
   position: relative;
   display: grid;
   grid-template-columns: 36px 1fr;
-  gap: 12px;
-  padding-bottom: 12px;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
 }
 
 .legs li:not(:last-child)::before {
@@ -314,7 +337,7 @@ const board = computed(() => {
   top: 36px;
   bottom: 0;
   width: 2px;
-  background: #c9ccd6;
+  background: var(--wb-line);
 }
 
 .leg-icon {
@@ -324,96 +347,85 @@ const board = computed(() => {
   place-items: center;
   width: 36px;
   height: 36px;
-  border: 1px solid #e3e5ec;
   border-radius: 50%;
-  background: #fff;
-  font-size: 1rem;
+  background: var(--wb-surface-2);
+  color: var(--wb-ink);
+  font-size: var(--fs-body);
+}
+
+.leg-icon--arrive {
+  background: var(--wb-ink);
+  color: var(--wb-on-ink);
 }
 
 .leg {
+  margin: 0;
   padding-top: 6px;
-  font-weight: 700;
-  color: #141a33;
+  font-weight: 600;
+  color: var(--wb-ink);
 }
 
 .leg-sub {
-  font-size: 0.875rem;
-  color: #4a5068;
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--wb-text-2);
 }
 
 .leg-sub a {
-  color: #0b7a4b;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--wb-green);
 }
 
 .nearby-block {
-  margin-top: 24px;
+  margin-top: var(--sp-5);
 }
 
 .nearby-title {
-  margin-bottom: 8px;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #4a5068;
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--wb-ink);
 }
 
 .nearby {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
 }
 
 .nearby li {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border-radius: 50px;
-  background: #e3f2ea;
-  color: #141a33;
-  font-size: 0.875rem;
-  font-weight: 600;
+  padding: 6px var(--sp-3);
+  border-radius: var(--r-pill);
+  background: var(--wb-surface-2);
+  color: var(--wb-text-2);
+  font-size: var(--fs-small);
+  font-weight: 500;
 }
 
 .quest-time {
-  margin-top: 20px;
-  background: #fdf3d7;
-  color: #7a5200;
-  border-radius: 10px;
-  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 20px 0 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-control);
+  background: var(--wb-amber-tint);
+  color: var(--wb-amber-ink);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 12px;
+  gap: var(--sp-3);
   margin-top: 28px;
-}
-
-.btn-wb-outline {
-  background: #fff;
-  border: 1px solid #c9ccd6;
-  color: #141a33;
-  border-radius: 50px;
-  padding: 12px 28px;
-  font-weight: 600;
-}
-
-.btn-wb-outline:hover {
-  background: #f1f2f6;
-}
-
-.btn-explore {
-  background: #0b7a4b;
-  color: #fff;
-  border-radius: 50px;
-  padding: 12px 28px;
-  font-weight: 600;
-}
-
-.btn-explore:hover {
-  background: #096640;
-  color: #fff;
 }
 </style>

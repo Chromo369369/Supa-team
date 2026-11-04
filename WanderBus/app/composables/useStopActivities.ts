@@ -9,6 +9,7 @@ export const useStopActivities = () => {
 
   // signposts and challenges at this stop, newest first. Each has kind + key ('signpost:12') so they can share the map with places
   const activities = ref<any[]>([])
+  const loadError = ref('')   // set when the signposts/challenges couldn't be loaded, so the page can show it with a Retry
   let stop: any = null
   let userId = ''
 
@@ -37,6 +38,7 @@ export const useStopActivities = () => {
 
   async function loadActivities(stopInfo: any) {
     stop = stopInfo
+    loadError.value = ''
     const { data: auth } = await $supabase.auth.getUser()
     userId = auth.user!.id
 
@@ -46,6 +48,7 @@ export const useStopActivities = () => {
     ])
     if (signposts.error || challenges.error) {
       console.error('[stop activities] load failed:', (signposts.error || challenges.error)!.message)
+      loadError.value = (signposts.error || challenges.error)!.message
       return
     }
 
@@ -135,5 +138,5 @@ export const useStopActivities = () => {
     challenge.completedByMe = true
   }
 
-  return { activities, loadActivities, saveActivity, deleteActivity, toggleHelpful, completeChallenge }
+  return { activities, loadError, loadActivities, saveActivity, deleteActivity, toggleHelpful, completeChallenge }
 }

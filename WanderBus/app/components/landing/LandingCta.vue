@@ -3,42 +3,51 @@ import LedBoard from '~/components/ui/LedBoard.vue';
 </script>
 
 <template>
-    <section class="container py-5">
-        <div class="cta-box row align-items-center g-4">
+    <section class="container landing-section">
+        <div class="cta-box row align-items-center gx-0 gy-4 gx-lg-5">
             <div class="col-lg-6">
-                <LedBoard :messages="[['YOUR NEXT STOP', 'IS WAITING'], ['ONE TAP', 'ONE ADVENTURE']]" label="Your next stop is waiting" />
+                <LedBoard :messages="[['YOUR NEXT STOP', 'IS WAITING'], ['ONE SPIN', 'ONE NEW STOP']]" label="Your next stop is waiting" />
             </div>
             <div class="col-lg-6">
-                <h2 class="section-title text-white">Free for a couple of hours?</h2>
-                <p class="cta-text mt-2">All it takes is one tap to find something fun to do in your neighbourhood.</p>
-                <NuxtLink to="/register" class="btn btn-wb-yellow mt-2">Create a free account</NuxtLink>
+                <h2 class="section-title cta-title mb-0">Free for a couple of hours?</h2>
+                <p class="cta-text">One spin gets you a bus, a stop and things to do when you get off.</p>
+                <NuxtLink to="/register" class="btn btn-wb-signal btn-lg">Create a free account</NuxtLink>
             </div>
         </div>
     </section>
 </template>
 
 <style scoped>
+.landing-section {
+  padding-block: var(--sp-8);
+  padding-inline: var(--gutter);
+}
+
+@media (min-width: 992px) {
+  .landing-section {
+    padding-block: var(--sp-9);
+  }
+}
+
 .cta-box {
   margin: 0;
-  padding: 32px;
-  background: #141a33;
-  border-radius: 24px;
+  padding: var(--sp-5);
+  background: var(--wb-ink);
+  border-radius: var(--r-card);
+}
+
+.cta-title {
+  color: var(--wb-on-ink);
 }
 
 .cta-text {
-  color: #c9ccd6;
+  margin: var(--sp-3) 0 var(--sp-5);
+  color: var(--wb-on-ink-2);
 }
 
-.btn-wb-yellow {
-  background: #f5a623;
-  color: #141a33;
-  border-radius: 50px;
-  padding: 12px 28px;
-  font-weight: 600;
-}
-
-.btn-wb-yellow:hover {
-  background: #e0951a;
-  color: #141a33;
+@media (min-width: 768px) {
+  .cta-box {
+    padding: var(--sp-7);
+  }
 }
 </style>

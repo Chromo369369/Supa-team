@@ -1,32 +1,34 @@
 <script setup>
 const features = [
-    { icon: '📍', title: 'Around this stop', text: 'A map of places within 1 km, with photos from other explorers. Be first to photograph an undiscovered spot and earn Pioneer badge.' },
-    { icon: '🚩', title: 'Signposts and challenges', text: 'Tips, ratings and mini-challenges pinned shared by previous explorers in the area.' },
-    { icon: '🎫', title: 'A card for every stop', text: 'Arrive and claim a collectible card with your avatar at that stop.' },
-    { icon: '📔', title: 'Passport', text: 'Every trip saved as a memory log in your passport with your route, photos and thoughts.' },
-    { icon: '👥', title: 'Group spin', text: 'Up to 5 friends join one lobby and vote for a destination out of 3 mystery tickets.' }
+    { icon: 'bi-ticket-perforated', title: 'Spin for a stop', text: 'Tell us where you’re starting, how long you have and what you’re in the mood for. You get a random stop you can reach in time.' },
+    { icon: 'bi-geo-alt-fill', title: 'Around the stop', text: 'A map of places within 1 km, with photos from other explorers. Post the first photo of a spot to earn Pioneer credit.' },
+    { icon: 'bi-signpost-2', title: 'Signposts and challenges', text: 'Leave a signpost with a tip and a rating, or set a challenge for the next explorer. Finish one by posting a photo.' },
+    { icon: 'bi-journal-bookmark', title: 'Passport', text: 'Save each trip to your passport, with your photos and notes.' },
+    { icon: 'bi-people', title: 'Explore together', text: 'Start a crew, share the join code and wait in one lobby until everyone’s aboard.' }
 ]
 </script>
 
 <template>
     <section class="section-white">
-        <div class="container py-5">
-            <div class="row g-5">
+        <div class="container landing-section">
+            <div class="row gx-4 gx-lg-5 gy-5">
                 <div class="col-lg-4">
-                    <h2 class="section-title">Every stop has something behind.</h2>
-                    <p class="hero-text mt-3">
-                        The spin gets you there. What explorers leave at each stop makes the next trip better, and gives you a reason to come back.
+                    <h2 class="section-title mb-0">Every stop has something to find.</h2>
+                    <p class="hero-text features-intro mb-0">
+                        The spin picks the stop. Tips and photos from other explorers show you what’s worth doing once you’re there.
                     </p>
                 </div>
 
                 <div class="col-lg-8">
-                    <div v-for="feature in features" :key="feature.title" class="feature-row">
-                        <span class="feature-icon">{{ feature.icon }}</span>
-                        <div>
-                            <h5 class="feature-title">{{ feature.title }}</h5>
-                            <p class="feature-text mb-0">{{ feature.text }}</p>
-                        </div>
-                    </div>
+                    <ul class="list-unstyled mb-0 feature-list">
+                        <li v-for="feature in features" :key="feature.title" class="feature-row">
+                            <span class="feature-icon"><i class="bi" :class="feature.icon" aria-hidden="true"></i></span>
+                            <div>
+                                <h3 class="feature-title">{{ feature.title }}</h3>
+                                <p class="feature-text mb-0">{{ feature.text }}</p>
+                            </div>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -34,35 +36,53 @@ const features = [
 </template>
 
 <style scoped>
-.feature-row {
-  display: flex;
-  gap: 16px;
-  padding: 20px 0;
-  border-bottom: 1px solid #e3e5ec;
+.landing-section {
+  padding-block: var(--sp-8);
+  padding-inline: var(--gutter);
 }
 
-.feature-row:last-child {
-  border-bottom: none;
+@media (min-width: 992px) {
+  .landing-section {
+    padding-block: var(--sp-9);
+  }
+}
+
+.features-intro {
+  margin-top: var(--sp-4);
+}
+
+/* Rows are separated by space, not lines */
+.feature-list {
+  display: grid;
+  gap: var(--sp-6);
+}
+
+.feature-row {
+  display: flex;
+  gap: var(--sp-4);
 }
 
 .feature-icon {
-  min-width: 48px;
+  flex: none;
+  width: 48px;
   height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: #f4f5f8;
-  font-size: 1.3rem;
+  border-radius: 50%;
+  background: var(--wb-surface-2);
+  color: var(--wb-ink);
+  font-size: var(--fs-lead);
 }
 
 .feature-title {
-  font-weight: 700;
-  color: #141a33;
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  color: var(--wb-ink);
 }
 
 .feature-text {
-  font-size: 0.95rem;
-  color: #4a5068;
+  color: var(--wb-text-2);
 }
 </style>

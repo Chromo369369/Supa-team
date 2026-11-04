@@ -3,6 +3,8 @@
   The badge (e.g. "??" or a bus number) sits on the left; messages flip in row by row every few
   seconds, and lines too long for the panel scroll. Screen readers get the plain text.
   Pass `messages` for a rotating sign, or just `line1` / `line2` for a single message.
+  Accessibility: only the `label` prop is announced (politely, when it changes), never each flip.
+  Rotation pauses on hover or focus and stops entirely under prefers-reduced-motion (first message).
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
@@ -17,6 +19,7 @@ const props = defineProps({
     /** Size of one LED dot in px. Leave empty to use 4 px on phones and 5 px on larger screens. */
     pitch: { type: Number, default: null },
     interval: { type: Number, default: 4200 },
+    /** Plain-text version of the sign. Announced to screen readers whenever it changes. */
     label: { type: String, default: '' }
 })
 
@@ -28,6 +31,7 @@ const width = ref(480)
 const pitchPx = computed(() => props.pitch ?? (width.value < 576 ? 4 : 5))
 const index = ref(0)
 const reduceMotion = ref(false)
+const paused = ref(false)
 
 const normalised = computed(() => {
     const list = props.messages?.length ? props.messages : [[props.line1, props.line2].filter(Boolean)]
@@ -61,10 +65,12 @@ const lines = computed(() => {
     })
 })
 
-const accessibleText = computed(() => props.label || [props.badge, ...current.value].filter(Boolean).join(' '))
+// Without a label, screen readers get the first message as static (non-live) text.
+const staticText = computed(() => [props.badge, ...(normalised.value[0] ?? [])].filter(Boolean).join(' '))
 
 let timer = null
 let resizeObserver = null
+let motionQuery = null
 
 function measure() {
     if (!wrap.value) return
@@ -74,15 +80,40 @@ function measure() {
 
 function schedule() {
     clearInterval(timer)
-    if (normalised.value.length > 1) {
+    timer = null
+    if (reduceMotion.value) {
+        index.value = 0
+        return
+    }
+    if (normalised.value.length > 1 && !paused.value) {
         timer = setInterval(() => {
             index.value = (index.value + 1) % normalised.value.length
         }, props.interval)
     }
 }
 
+function pause() {
+    paused.value = true
+    schedule()
+}
+
+function resume(e) {
+    // Stay paused while focus or the pointer is still inside the sign.
+    if (e?.type === 'focusout' && wrap.value?.contains(e.relatedTarget)) return
+    if (e?.type === 'mouseleave' && wrap.value?.contains(document.activeElement)) return
+    paused.value = false
+    schedule()
+}
+
+const onMotionChange = () => {
+    reduceMotion.value = motionQuery.matches
+    schedule()
+}
+
 onMounted(() => {
-    reduceMotion.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    reduceMotion.value = motionQuery.matches
+    motionQuery.addEventListener('change', onMotionChange)
     measure()
     resizeObserver = new ResizeObserver(measure)
     resizeObserver.observe(wrap.value)
@@ -92,6 +123,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
     clearInterval(timer)
     resizeObserver?.disconnect()
+    motionQuery?.removeEventListener('change', onMotionChange)
 })
 
 // Restart from the first message when the content changes (e.g. a new spin result).
@@ -105,7 +137,15 @@ watch(
 </script>
 
 <template>
-    <div ref="wrap" class="led-board" :style="{ height: `${ROWS * pitchPx}px` }">
+    <div
+        ref="wrap"
+        class="led-board"
+        :style="{ height: `${ROWS * pitchPx}px` }"
+        @mouseenter="pause"
+        @mouseleave="resume"
+        @focusin="pause"
+        @focusout="resume"
+    >
         <svg
             class="led-board__svg"
             :viewBox="`0 0 ${cols} ${ROWS}`"
@@ -142,7 +182,8 @@ watch(
                 </Transition>
             </g>
         </svg>
-        <p class="visually-hidden" aria-live="polite">{{ accessibleText }}</p>
+        <p v-if="label" class="visually-hidden" aria-live="polite">{{ label }}</p>
+        <p v-else class="visually-hidden">{{ staticText }}</p>
     </div>
 </template>
 
@@ -150,9 +191,8 @@ watch(
 .led-board {
   position: relative;
   overflow: hidden;
-  background-color: #141a33;
-  border-radius: 12px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 10px 24px rgba(0, 0, 0, 0.35);
+  background-color: var(--wb-ink);
+  border-radius: var(--r-control);
 }
 
 .led-board__svg {
@@ -161,12 +201,13 @@ watch(
 }
 
 .led-board__off {
-  fill: #262c4a;
+  /* unlit dots: one faint step up from the navy panel */
+  fill: color-mix(in srgb, var(--wb-on-ink) 9%, var(--wb-ink));
 }
 
+/* Lit dots: the one legitimate use of amber as a glyph fill (design.md §2.1). */
 .led-board__on {
-  fill: #f5a623;
-  filter: drop-shadow(0 0 0.6px rgba(245, 166, 35, 0.9));
+  fill: var(--wb-amber);
 }
 
 .led-board__scroll {

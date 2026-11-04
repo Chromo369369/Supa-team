@@ -7,10 +7,12 @@
   CSS-transition tilt instead of motion springs, no image layer, `width` follows the container.
 
   Accessibility: the stub is a real focusable button; Enter or Space tears it instantly, and
-  reduced-motion users get an instant tear after a short drag.
+  reduced-motion users get an instant tear after a short drag. The focus ring is drawn outside the
+  stub's clip path (3px --wb-green, 4px out). The pointer-follow tilt is off after the tear and
+  under reduced motion.
 -->
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
 const props = defineProps({
   torn: { type: Boolean, default: undefined },
@@ -32,9 +34,9 @@ const props = defineProps({
   tiltReach: { type: Number, default: 260 },
   parallax: { type: Number, default: 5 },
   perspective: { type: Number, default: 1000 },
-  background: { type: String, default: '#ffffff' },
+  background: { type: String, default: 'var(--wb-surface)' },
   stubBackground: { type: String, default: '' },
-  color: { type: String, default: '#141a33' },
+  color: { type: String, default: 'var(--wb-ink)' },
   border: { type: Boolean, default: true },
   borderColor: { type: String, default: '' },
   borderWidth: { type: Number, default: 1 },
@@ -124,6 +126,7 @@ const reduceMotion = ref(false)
 const tiltX = ref(0)
 const tiltY = ref(0)
 
+const uid = useId()
 const root = ref(null)
 const stage = ref(null)
 const body = ref(null)
@@ -443,8 +446,23 @@ function onWindowPointerMove(e) {
 
 let resizeObserver = null
 let motionQuery = null
+let tiltListening = false
+
+// The window-wide tilt listener only runs while it can matter: before the tear, with motion allowed.
+function syncTilt() {
+  const want = typeof window !== 'undefined' && props.tilt && !props.disabled && !used.value && !reduceMotion.value
+  if (want && !tiltListening) window.addEventListener('pointermove', onWindowPointerMove)
+  if (!want && tiltListening) {
+    window.removeEventListener('pointermove', onWindowPointerMove)
+    tiltX.value = 0
+    tiltY.value = 0
+  }
+  tiltListening = want
+}
+
 const onMotionChange = () => {
   reduceMotion.value = motionQuery.matches
+  syncTilt()
 }
 
 onMounted(() => {
@@ -459,7 +477,7 @@ onMounted(() => {
   resizeObserver = new ResizeObserver(measure)
   resizeObserver.observe(root.value)
 
-  if (props.tilt && !props.disabled) window.addEventListener('pointermove', onWindowPointerMove)
+  syncTilt()
   if (used.value && stubEl.value) stubEl.value.style.visibility = 'hidden'
 })
 
@@ -468,9 +486,13 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   motionQuery?.removeEventListener('change', onMotionChange)
   window.removeEventListener('pointermove', onWindowPointerMove)
+  tiltListening = false
 })
 
+watch(() => [props.tilt, props.disabled], syncTilt)
+
 watch(used, (value) => {
+  syncTilt()
   if (value) {
     if (sim.phase === 'idle' && stubEl.value) stubEl.value.style.visibility = 'hidden'
     return
@@ -534,6 +556,14 @@ watch(geo, () => {
           <svg v-if="border" class="tear-ticket__edge" :viewBox="`0 0 ${width} ${height}`" aria-hidden="true">
             <path :d="geo.stubOutline" />
           </svg>
+          <!-- Focus ring: a 3px band 4-7px outside the stub's outer edge (the inner half is hidden under the paper). -->
+          <svg class="tear-ticket__focus" :viewBox="`0 0 ${width} ${height}`" aria-hidden="true">
+            <mask :id="`${uid}-ring`" maskUnits="userSpaceOnUse" :x="-20" :y="-20" :width="width + 40" :height="height + 40">
+              <path :d="geo.stubOutline" class="tear-ticket__ring-outer" />
+              <path :d="geo.stubOutline" class="tear-ticket__ring-inner" />
+            </mask>
+            <path :d="geo.stubOutline" class="tear-ticket__ring" :mask="`url(#${uid}-ring)`" />
+          </svg>
           <div class="tear-ticket__paper tear-ticket__paper--stub" :style="{ clipPath: `path('${geo.stub}')` }">
             <div class="tear-ticket__stub">
               <slot name="stub" />
@@ -568,7 +598,7 @@ watch(geo, () => {
   height: var(--tt-h);
   transform: scale(var(--tt-fit));
   transform-origin: top left;
-  transition: transform 650ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 650ms var(--ease);
 }
 
 .tear-ticket[data-shift='x'] .tear-ticket__stage {
@@ -582,7 +612,7 @@ watch(geo, () => {
 .tear-ticket__plane {
   position: absolute;
   inset: 0;
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 220ms var(--ease);
 }
 
 .tear-ticket__piece {
@@ -596,8 +626,43 @@ watch(geo, () => {
   will-change: transform;
 }
 
-.tear-ticket__piece--stub:focus-visible .tear-ticket__paper--stub {
-  box-shadow: inset 0 0 0 3px #f5a623;
+.tear-ticket__focus {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.tear-ticket__piece--stub:focus-visible .tear-ticket__focus {
+  opacity: 1;
+}
+
+.tear-ticket__focus path {
+  fill: none;
+  stroke-linejoin: round;
+}
+
+.tear-ticket__ring {
+  stroke: var(--wb-green);
+  stroke-width: 14;
+}
+
+.tear-ticket__ring-outer {
+  stroke: #fff; /* mask luminance: white = show */
+  stroke-width: 14;
+}
+
+.tear-ticket__ring-inner {
+  stroke: #000; /* mask luminance: black = hide (the 4px gap) */
+  stroke-width: 8;
+}
+
+/* Only while it is held does the stub float, so only then does it get --wb-lift (design.md §3.4). */
+.tear-ticket[data-grabbing] .tear-ticket__piece--stub {
+  filter: drop-shadow(var(--wb-lift)); /* taste-skill-ignore: lifted stub is a floating object */
 }
 
 .tear-ticket__edge {
@@ -643,7 +708,7 @@ watch(geo, () => {
   bottom: 0;
   left: 0;
   width: calc(var(--tt-w) - var(--tt-stub));
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 220ms var(--ease);
 }
 
 .tear-ticket__stub {

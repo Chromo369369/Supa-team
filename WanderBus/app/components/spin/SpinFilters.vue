@@ -1,7 +1,10 @@
 <!--
-  Spin filters: starting location, time available and what you're in the mood for.
+  Spin filters: starting location, time available and what you’re in the mood for.
   A sidebar from the lg breakpoint up; on phones a bottom sheet (Bootstrap offcanvas) opened from a dock
-  that keeps a summary and the Spin button in reach. Category chips are real checkboxes (.btn-check).
+  that keeps a summary and the Spin button in reach. Category chips are real checkboxes (.btn-check),
+  so their checked state is announced natively.
+  The start location is a WAI-ARIA combobox. Time and categories are mirrored in the URL
+  (?mins=60&cats=cafe,park); the start location stays in memory only.
 -->
 <script setup>
 import { categoryInfo } from '~/utils/spinCategories'
@@ -22,19 +25,97 @@ const props = defineProps({
 
 const emit = defineEmits(['submit'])
 
+const MIN_TIME = 10
+const MAX_TIME = 120
+
 const canSpin = computed(() => !!selectedPlace.value && !!travelTime.value && !props.busy)
-const suggestions = computed(() => (startingLocation.value && !selectedPlace.value ? (props.places ?? []).slice(0, 5) : []))
-const spinLabel = computed(() => (props.busy ? 'Drawing your ticket…' : props.hasSpun ? 'Spin again' : 'Spin'))
+// A disabled Spin button explains itself (design.md §2.4).
+const spinHint = computed(() => (!props.busy && !selectedPlace.value ? 'Pick a starting point to spin' : ''))
+const spinLabel = computed(() => (props.busy ? 'Spinning…' : props.hasSpun ? 'Spin again' : 'Spin'))
 
 const summary = computed(() => {
     const moods = preferences.value?.length ? preferences.value.map((c) => categoryInfo(c).label).join(', ') : 'Anything'
     return `Up to ${travelTime.value} min, ${moods}`
 })
 
+// Starting-location combobox (WAI-ARIA combobox with a listbox popup)
+const listboxId = 'start-suggestions'
+const activeIndex = ref(-1)
+const dismissed = ref(false)
+const typed = computed(() => !!startingLocation.value && !selectedPlace.value)
+const suggestions = computed(() => (typed.value ? (props.places ?? []).slice(0, 5) : []))
+const listOpen = computed(() => suggestions.value.length > 0 && !dismissed.value)
+const activeId = computed(() => (listOpen.value && activeIndex.value >= 0 ? `${listboxId}-${activeIndex.value}` : undefined))
+const resultCount = computed(() => {
+    if (!typed.value || dismissed.value) return ''
+    const n = suggestions.value.length
+    if (!n) return startingLocation.value.length >= 3 ? 'No matching places' : ''
+    return `${n} ${n === 1 ? 'place' : 'places'} found. Use the up and down arrows to choose.`
+})
+
+watch(suggestions, () => {
+    activeIndex.value = -1
+})
+
+function onLocationInput() {
+    selectedPlace.value = ''
+    dismissed.value = false
+}
+
 function choosePlace(place) {
     selectedPlace.value = place
     startingLocation.value = place.ADDRESS
+    activeIndex.value = -1
 }
+
+function onLocationKey(e) {
+    const n = suggestions.value.length
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (!n) return
+        e.preventDefault()
+        dismissed.value = false
+        const step = e.key === 'ArrowDown' ? 1 : -1
+        activeIndex.value = activeIndex.value < 0 ? (step > 0 ? 0 : n - 1) : (activeIndex.value + step + n) % n
+    } else if (e.key === 'Enter') {
+        if (listOpen.value && activeIndex.value >= 0) {
+            e.preventDefault()
+            choosePlace(suggestions.value[activeIndex.value])
+        }
+    } else if (e.key === 'Escape') {
+        if (listOpen.value) {
+            e.preventDefault()
+            dismissed.value = true
+            activeIndex.value = -1
+        }
+    }
+}
+
+// Time and categories live in the URL so a spin setup can be shared or restored.
+const route = useRoute()
+const router = useRouter()
+
+onMounted(() => {
+    const mins = Number(route.query.mins)
+    if (route.query.mins && Number.isFinite(mins)) {
+        travelTime.value = Math.min(MAX_TIME, Math.max(MIN_TIME, Math.round(mins / 5) * 5))
+    }
+    if (typeof route.query.cats === 'string' && route.query.cats) {
+        const known = props.categories ?? []
+        const cats = route.query.cats.split(',').filter((c) => known.includes(c))
+        if (cats.length) preferences.value = cats
+    }
+})
+
+watch(
+    () => [travelTime.value, (preferences.value ?? []).join(',')],
+    ([mins, cats]) => {
+        const query = { ...route.query, mins: String(mins) }
+        if (cats) query.cats = cats
+        else delete query.cats
+        if (query.mins === route.query.mins && query.cats === route.query.cats) return
+        router.replace({ query })
+    }
+)
 
 function submit() {
     if (canSpin.value) emit('submit')
@@ -62,31 +143,52 @@ function submit() {
                                 type="text"
                                 class="form-control search-input"
                                 :class="{ 'is-chosen': selectedPlace }"
-                                placeholder="Search for a place or address"
+                                placeholder="Search for a place or address…"
                                 autocomplete="off"
-                                @input="selectedPlace = ''"
+                                spellcheck="false"
+                                role="combobox"
+                                aria-autocomplete="list"
+                                :aria-expanded="listOpen ? 'true' : 'false'"
+                                :aria-controls="listboxId"
+                                :aria-activedescendant="activeId"
+                                @input="onLocationInput"
+                                @keydown="onLocationKey"
                             >
-                            <ul v-if="suggestions.length" class="suggestions" aria-label="Matching places">
-                                <li v-for="place of suggestions" :key="place.ADDRESS">
-                                    <button type="button" class="suggestion" @click="choosePlace(place)">{{ place.ADDRESS }}</button>
+                            <ul v-show="listOpen" :id="listboxId" class="suggestions" role="listbox" aria-label="Matching places">
+                                <li
+                                    v-for="(place, i) of suggestions"
+                                    :id="`${listboxId}-${i}`"
+                                    :key="place.ADDRESS"
+                                    class="suggestion"
+                                    :class="{ 'is-active': i === activeIndex }"
+                                    role="option"
+                                    :aria-selected="i === activeIndex ? 'true' : 'false'"
+                                    @mousedown.prevent
+                                    @click="choosePlace(place)"
+                                >
+                                    <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
+                                    <span>{{ place.ADDRESS }}</span>
                                 </li>
                             </ul>
+                            <p class="visually-hidden" aria-live="polite">{{ resultCount }}</p>
                         </div>
 
                         <div class="filter-group">
                             <label class="filter-legend" for="travel-time">
-                                How long do you have? <span class="filter-value">up to {{ travelTime }} min</span>
+                                How long do you have? <span class="filter-value">up to <span class="num">{{ travelTime }}</span> min</span>
                             </label>
                             <input
                                 id="travel-time"
                                 v-model.number="travelTime"
                                 type="range"
                                 class="form-range"
-                                min="10"
-                                max="120"
+                                :min="MIN_TIME"
+                                :max="MAX_TIME"
                                 step="5"
+                                :aria-valuetext="`Up to ${travelTime} minutes`"
+                                aria-describedby="travel-time-help"
                             >
-                            <p class="form-text m-0">Walking to the stop, waiting and the ride all count.</p>
+                            <p id="travel-time-help" class="form-text m-0">Walking to the stop, waiting and the ride all count.</p>
                         </div>
 
                         <fieldset class="filter-group">
@@ -94,24 +196,31 @@ function submit() {
                             <div class="chips">
                                 <template v-for="cat of categories" :key="cat">
                                     <input :id="`cat-${cat}`" v-model="preferences" type="checkbox" class="btn-check" :value="cat">
-                                    <label class="btn btn-chip" :for="`cat-${cat}`">{{ categoryInfo(cat).label }}</label>
+                                    <label class="btn btn-chip" :for="`cat-${cat}`">
+                                        <i :class="['bi', categoryInfo(cat).icon, 'chip-icon']" aria-hidden="true"></i>
+                                        <i class="bi bi-check-lg chip-check" aria-hidden="true"></i>
+                                        {{ categoryInfo(cat).label }}
+                                    </label>
                                 </template>
                             </div>
-                            <p class="form-text mb-0 mt-2">Pick none for any stop at all.</p>
+                            <p class="form-text mb-0 mt-2">Pick none and any stop can come up.</p>
                         </fieldset>
                     </fieldset>
 
                     <div class="spin-bar">
                         <button
                             type="button"
-                            class="btn btn-wb-green btn-lg w-100"
+                            class="btn btn-wb-primary btn-lg w-100"
                             :disabled="!canSpin"
+                            :aria-busy="busy ? 'true' : undefined"
+                            :aria-describedby="spinHint ? 'spin-hint' : undefined"
                             data-bs-dismiss="offcanvas"
                             data-bs-target="#filters-sheet"
                             @click="submit()"
                         >
                             {{ spinLabel }}
                         </button>
+                        <p v-if="spinHint" id="spin-hint" class="spin-hint">{{ spinHint }}</p>
                     </div>
                 </section>
             </div>
@@ -119,37 +228,48 @@ function submit() {
 
         <!-- Phones: filters summary and Spin stay in reach at the bottom of the screen -->
         <div class="dock d-lg-none">
-            <button type="button" class="dock-filters" data-bs-toggle="offcanvas" data-bs-target="#filters-sheet" aria-controls="filters-sheet">
-                <span class="dock-text">
-                    <span class="dock-label">Filters</span>
-                    <span class="dock-summary">{{ summary }}</span>
-                </span>
-            </button>
-            <button type="button" class="btn btn-wb-green btn-lg" :disabled="!canSpin" @click="submit()">
-                {{ busy ? '…' : hasSpun ? 'Spin again' : 'Spin' }}
-            </button>
+            <p v-if="spinHint" id="dock-spin-hint" class="spin-hint dock-hint">{{ spinHint }}</p>
+            <div class="dock-row">
+                <button type="button" class="dock-filters" data-bs-toggle="offcanvas" data-bs-target="#filters-sheet" aria-controls="filters-sheet">
+                    <i class="bi bi-sliders" aria-hidden="true"></i>
+                    <span class="dock-text">
+                        <span class="dock-label">Filters</span>
+                        <span class="dock-summary num">{{ summary }}</span>
+                    </span>
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-wb-primary btn-lg"
+                    :disabled="!canSpin"
+                    :aria-busy="busy ? 'true' : undefined"
+                    :aria-describedby="spinHint ? 'dock-spin-hint' : undefined"
+                    @click="submit()"
+                >
+                    {{ busy ? 'Spinning…' : hasSpun ? 'Spin again' : 'Spin' }}
+                </button>
+            </div>
         </div>
     </div>
 </template>
 
 <style scoped>
 .filters {
-  background: #fff;
-  border: 1px solid #e3e5ec;
-  border-radius: 16px;
-  padding: 24px;
+  background: var(--wb-surface);
+  border-radius: var(--r-card);
+  padding: var(--sp-5);
 }
 
 .filters-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #141a33;
   margin-bottom: 20px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  color: var(--wb-ink);
 }
 
 .filter-fields {
   display: grid;
-  gap: 24px;
+  gap: var(--sp-5);
   min-width: 0;
   border: 0;
 }
@@ -163,148 +283,160 @@ function submit() {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--sp-2);
   width: 100%;
   float: none;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #141a33;
-  margin-bottom: 12px;
+  margin-bottom: var(--sp-3);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--wb-ink);
 }
 
 .filter-value {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #0b7a4b;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--wb-text-2);
   white-space: nowrap;
 }
 
-/* Starting location search */
-.search-input {
-  padding: 10px 12px;
-  border: 1px solid #c9ccd6;
-  border-radius: 12px;
+.form-text {
+  color: var(--wb-muted);
+  font-size: var(--fs-small);
 }
 
-.search-input:focus {
-  border-color: #0b7a4b;
-  box-shadow: 0 0 0 3px rgba(11, 122, 75, 0.2);
+/* Starting location search (border, radius and focus ring come from main.css) */
+.search-input {
+  padding: 10px 12px;
 }
 
 .search-input.is-chosen {
-  border-color: #0b7a4b;
-  background: #f1f8f4;
+  border-color: var(--wb-green);
+  background: var(--wb-green-tint);
 }
 
+/* Suggestions sit in the flow on a tone step: no border, no elevation */
 .suggestions {
   list-style: none;
-  margin-top: 6px;
-  border: 1px solid #e3e5ec;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fff;
-  box-shadow: 0 8px 24px rgba(20, 26, 51, 0.08);
+  margin: 6px 0 0;
+  padding: var(--sp-1);
+  border-radius: var(--r-control);
+  background: var(--wb-surface-2);
 }
 
 .suggestion {
-  display: block;
-  width: 100%;
-  padding: 10px 14px;
-  border: 0;
-  border-bottom: 1px solid #f1f2f6;
-  background: #fff;
-  color: #141a33;
-  font-size: 0.875rem;
-  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: 8px;
+  color: var(--wb-ink);
+  font-size: var(--fs-small);
+  cursor: pointer;
 }
 
-.suggestions li:last-child .suggestion {
-  border-bottom: 0;
+.suggestion .bi {
+  flex-shrink: 0;
+  color: var(--wb-text-2);
 }
 
 .suggestion:hover,
-.suggestion:focus-visible {
-  background: #f1f8f4;
+.suggestion.is-active {
+  background: var(--wb-surface);
+}
+
+.suggestion.is-active {
+  outline: 2px solid var(--wb-green);
+  outline-offset: -2px;
 }
 
 /* Range */
 .form-range::-webkit-slider-thumb {
-  background: #0b7a4b;
+  background: var(--wb-green);
 }
 
 .form-range::-moz-range-thumb {
-  background: #0b7a4b;
+  background: var(--wb-green);
 }
 
 .form-range:focus::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px rgba(11, 122, 75, 0.25);
+  box-shadow:none; /* clears Bootstrap focus glow */
 }
 
-/* Category chips */
+.form-range:focus::-moz-range-thumb {
+  box-shadow:none; /* clears Bootstrap focus glow */
+}
+
+.form-range:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 4px;
+  border-radius: var(--r-pill);
+}
+
+/* Category chips: tone at rest; green tint, green text and a check when selected (design.md §4.3) */
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
 .btn-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 40px;
-  padding: 6px 14px;
-  border: 1px solid #c9ccd6;
-  border-radius: 50px;
-  background: #fff;
-  color: #141a33;
-  font-size: 0.9rem;
-  font-weight: 600;
+  min-height: 44px;
+  padding: 6px var(--sp-4);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--wb-surface-2);
+  color: var(--wb-text-2);
+  font-size: var(--fs-small);
+  font-weight: 500;
 }
 
 .btn-chip:hover {
-  background: #f1f2f6;
-  border-color: #c9ccd6;
-  color: #141a33;
+  background: var(--wb-line);
+  color: var(--wb-ink);
+}
+
+.chip-check {
+  display: none;
 }
 
 .btn-check:checked + .btn-chip {
-  background: #e3f2ea;
-  border-color: #0b7a4b;
-  color: #0b7a4b;
+  background: var(--wb-green-tint);
+  color: var(--wb-green);
+}
+
+.btn-check:checked + .btn-chip .chip-icon {
+  display: none;
+}
+
+.btn-check:checked + .btn-chip .chip-check {
+  display: inline;
 }
 
 .btn-check:focus-visible + .btn-chip {
-  box-shadow: 0 0 0 3px rgba(11, 122, 75, 0.25);
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
+  box-shadow:none; /* clears Bootstrap focus glow */
 }
 
-/* Spin button, sticky at the bottom of the panel */
+/* Spin button, sticky at the bottom of the panel: opaque, separated by space rather than a line */
 .spin-bar {
   position: sticky;
   bottom: 0;
-  margin: 24px -24px -24px;
-  padding: 12px 24px calc(12px + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid #e3e5ec;
-  border-radius: 0 0 16px 16px;
+  margin: var(--sp-5) calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5));
+  padding: var(--sp-3) var(--sp-5) calc(var(--sp-3) + env(safe-area-inset-bottom));
+  background: var(--wb-surface);
+  border-radius: 0 0 var(--r-card) var(--r-card);
 }
 
-.btn-wb-green {
-  background: #0b7a4b;
-  color: #fff;
-  border-radius: 50px;
-  font-weight: 700;
-}
-
-.btn-wb-green:hover {
-  background: #096640;
-  color: #fff;
-}
-
-.btn-wb-green:disabled {
-  background: #9cc9b5;
-  border-color: #9cc9b5;
-  color: #fff;
+.spin-hint {
+  margin: var(--sp-2) 0 0;
+  color: var(--wb-muted);
+  font-size: var(--fs-small);
+  text-align: center;
 }
 
 @media (min-width: 992px) {
@@ -322,16 +454,15 @@ function submit() {
   }
 }
 
-/* Bottom sheet on phones */
+/* Bottom sheet on phones: a floating surface, so it keeps --wb-float */
 @media (max-width: 991.98px) {
   .filters-sheet.offcanvas-lg {
     height: auto;
-    max-height: 88vh;
+    max-height: 88dvh;
+    border: 0;
     border-radius: 20px 20px 0 0;
-  }
-
-  .filters-sheet-header {
-    border-bottom: 1px solid #e3e5ec;
+    background: var(--wb-surface);
+    box-shadow: var(--wb-float); /* taste-skill-ignore: the bottom sheet floats over the page */
   }
 
   .filters-sheet .offcanvas-body {
@@ -339,7 +470,6 @@ function submit() {
   }
 
   .filters-sheet .filters {
-    border: 0;
     border-radius: 0;
   }
 
@@ -348,21 +478,26 @@ function submit() {
   }
 }
 
-/* Phone dock */
+/* Phone dock: opaque and floating (design.md §4.3) */
 .dock {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 1030;
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom));
+  background: var(--wb-surface);
+  box-shadow: var(--wb-float); /* taste-skill-ignore: the fixed dock floats over the content */
+}
+
+.dock-row {
   display: flex;
-  gap: 8px;
+  gap: var(--sp-2);
   align-items: center;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid #e3e5ec;
-  box-shadow: 0 -8px 24px -16px rgba(20, 26, 51, 0.35);
+}
+
+.dock-hint {
+  margin: 0 0 var(--sp-2);
 }
 
 .dock .btn {
@@ -374,14 +509,19 @@ function submit() {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   min-height: 52px;
-  padding: 8px 12px;
-  border: 1px solid #c9ccd6;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
   border-radius: 14px;
-  background: #fff;
-  color: #141a33;
+  background: var(--wb-surface-2);
+  color: var(--wb-ink);
   text-align: left;
+}
+
+.dock-filters:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
 }
 
 .dock-text {
@@ -391,13 +531,13 @@ function submit() {
 }
 
 .dock-label {
-  font-weight: 700;
-  font-size: 0.875rem;
+  font-weight: 600;
+  font-size: var(--fs-small);
 }
 
 .dock-summary {
-  font-size: 0.75rem;
-  color: #6b7085;
+  font-size: var(--fs-meta);
+  color: var(--wb-text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
