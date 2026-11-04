@@ -18,6 +18,16 @@ const loadingMembers = ref(true)
 const membersError = ref('')
 const currentUserId = ref('')
 const leavingGroup = ref(false)
+const ready = ref(false)
+const travelTime = ref(null)
+const startingLocation = ref('')
+const selectedPlace=ref('')
+const preferences = ref([])
+const locResponse = await useFetch('/api/onemap', {
+    query: { value: startingLocation }
+})
+
+
 
 
 onMounted(async () => {
@@ -164,10 +174,20 @@ async function leaveGroup() {
           type="button"
           class="lobby-button green-button"
           :disabled="!isHost"
+          @click="ready=true"
         >
-          Ready? Let's Spin!
+          Ready
         </button>
-
+        <SpinFilters
+        v-if="ready"
+        v-model:travelTime="travelTime"
+        v-model:starting-location="startingLocation"
+        v-model:selected-place="selectedPlace"
+        :categories="Object.keys(categories)"
+        v-model:preferences="preferences"
+        :places="locResponse.data.value"
+        @submit="spin()"
+        />
       </div>
     </div>
   </div>
