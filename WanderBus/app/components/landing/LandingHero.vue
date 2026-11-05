@@ -1,64 +1,128 @@
 <script setup>
-import LedBoard from '~/components/ui/LedBoard.vue';
 import SpinTicket from '~/components/ui/SpinTicket.vue';
+import HeroChase from '~/components/landing/HeroChase.vue';
 </script>
 
 <template>
-    <section class="container py-4">
-        <LedBoard line1="SOMEWHERE NEW" line2="ANY BUS, ANY STOP" class="mb-5" />
+    <section class="container hero-section">
+        <!-- Full width so the headline holds to two lines at every width -->
+        <h1 class="hero-title">Take a random bus. Get off somewhere worth it.</h1>
 
-        <div class="row align-items-center g-5">
-            <div class="col-lg-6">
-                <h1 class="hero-title">Take a random bus. Get off somewhere worth it.</h1>
-                <p class="hero-text mt-3">
-                    WanderBus selects a bus and a destination that fit your schedule and finds an activity or place of interest you might be interested.
+        <div class="row align-items-center gx-4 gx-lg-5 gy-5">
+            <div class="col-lg-5">
+                <p class="hero-text mb-0">
+                    WanderBus picks a stop you can reach in the time you have, with places to explore when you get off.
                 </p>
-                <div class="d-flex flex-wrap gap-3 mt-4">
-                    <NuxtLink to="/register" class="btn btn-wb-green">Start a side quest →</NuxtLink>
-                    <NuxtLink to="/login" class="btn btn-wb-outline">I have an account</NuxtLink>
+                <div class="d-flex flex-wrap gap-3 hero-actions">
+                    <NuxtLink to="/register" class="btn btn-wb-primary btn-lg">Start a side quest →</NuxtLink>
+                    <NuxtLink to="/login" class="btn btn-wb-secondary btn-lg">Log in</NuxtLink>
                 </div>
-                <p class="small-note mt-4">🚌 Uses the real routes of all 5,103 bus stops in Singapore.</p>
+                <p class="small-note hero-note mb-0">
+                    <i class="bi bi-bus-front" aria-hidden="true"></i>
+                    Built on real bus routes, covering all <span class="num">5,103</span> stops in Singapore.
+                </p>
+                <!-- Below the CTAs: "How it works", then the lane the idle bus loops in
+                     (the on/off control is LandingCursor's corner pill) -->
+                <div class="hero-foot">
+                    <a href="#how-it-works" class="hero-how">How it works ↓</a>
+                    <span class="hero-lane" data-chase-lane aria-hidden="true"></span>
+                </div>
             </div>
 
-            <div class="col-lg-6 text-center">
+            <div class="col-lg-7 hero-ticket">
                 <SpinTicket />
-                <p class="small-note mt-3">Click on the stub to reveal your destination</p>
+                <p class="small-note mt-3 mb-0">Drag, tap or press Enter to tear the stub</p>
             </div>
         </div>
+
+        <HeroChase />
     </section>
 </template>
 
 <style scoped>
+.hero-section {
+  position: relative;
+  padding-block: var(--sp-7) var(--sp-8);
+  padding-inline: var(--gutter);
+}
+
+/* Content sits above the chase layer. */
+.hero-title,
+.hero-section > .row {
+  position: relative;
+  z-index: 1;
+}
+
+/* 7vw keeps it to two lines on phones; full width keeps it to two on desktop */
 .hero-title {
-  font-size: 3.6rem;
-  font-weight: 800;
+  margin: 0 0 var(--sp-6);
+  font-size: min(var(--fs-hero), 7vw);
   line-height: 1.05;
-  color: #141a33;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
-.btn-wb-green {
-  background: #0b7a4b;
-  color: #fff;
-  border-radius: 50px;
-  padding: 12px 28px;
-  font-weight: 600;
+/* Focus lands here after the intro; it is not a control, so no ring. */
+.hero-title:focus {
+  outline: none;
 }
 
-.btn-wb-green:hover {
-  background: #096640;
-  color: #fff;
+.hero-actions {
+  margin-top: var(--sp-5);
 }
 
-.btn-wb-outline {
-  background: #fff;
-  border: 1px solid #c9ccd6;
-  color: #141a33;
-  border-radius: 50px;
-  padding: 12px 28px;
-  font-weight: 600;
+.hero-note {
+  margin-top: var(--sp-5);
 }
 
-.btn-wb-outline:hover {
-  background: #f1f2f6;
+.hero-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+
+/* Free space the idle bus and mascot loop in (HeroChase finds it by data-chase-lane). */
+.hero-lane {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 56px;
+}
+
+.hero-how {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--wb-ink);
+  font-weight: 500;
+  text-underline-offset: 4px;
+}
+
+.hero-how:hover {
+  color: var(--wb-green);
+}
+
+.hero-how:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 3px;
+  border-radius: var(--r-control);
+}
+
+.hero-ticket {
+  text-align: center;
+}
+
+@media (min-width: 992px) {
+  .hero-section {
+    padding-block: var(--sp-8) var(--sp-9);
+  }
+
+  /* the ticket is the dominant thing on the right, set against the far margin */
+  .hero-ticket {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: right;
+  }
 }
 </style>

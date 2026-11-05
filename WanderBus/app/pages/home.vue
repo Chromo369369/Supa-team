@@ -1,15 +1,17 @@
 <script setup>
 import SpinFilters from '~/components/spin/SpinFilters.vue';
 import SpinResults from '~/components/spin/SpinResults.vue';
+import BoardingIntro from '~/components/landing/BoardingIntro.vue';
 import { filterByAmens } from '~/composables/filterAmens';
 
 const { $supabase } = useNuxtApp()
+const toast = useToast()
 
 definePageMeta({ middleware: 'auth' })
 
 const amenStops = await useFetch('/api/allAmenities')
 const preferences = ref([])
-const travelTimeTemp = ref(null)
+const travelTimeTemp = ref(60)
 const travelTime = ref(60)
 const startingLocation = ref('')
 const response = await useFetch('/api/allBusStops')
@@ -27,52 +29,39 @@ const stopDetails = ref('')
 const startDetails = ref('')
 const errorMessage = ref('')
 const possibleStops = ref({})
+// Up to 3 different stops for bays A/B/C; picking a bay sets chosenStop.
+const ticketOptions = ref([])
 
-// AUTOMATIC CREATE: Saves directly to passport_entries in Supabase
-async function autoSavePassportEntry() {
-    try {
-        if (!chosenStop.value) return
-
-        const { data: { user } } = await $supabase.auth.getUser()
-
-        const payload = {
-            user_id: user?.id || null,
-            starting_location: selectedPlace.value?.ADDRESS || startingLocation.value || 'Selected Start Location',
-            starting_stop: startDetails.value?.Description || chosenStop.value?.chosen?.boardAt || 'Boarding Stop',
-            end_stop: stopDetails.value?.Description || chosenStop.value?.destination || 'Alighting Stop',
-            bus_taken: chosenStop.value?.chosen?.bus ? String(chosenStop.value.chosen.bus) : 'Walk',
-            time_taken: Math.ceil(chosenStop.value?.chosen?.totalTime || 0),
-            entry_time: new Date().toISOString()
-        }
-
-        const { error } = await $supabase
-            .from('passport_entries')
-            .insert(payload)
-
-        if (error) {
-            console.error('[Passport Auto-Save Error]:', error.message)
-            return
-        }
-
-        console.log('Successfully auto-saved spin to passport_entries!')
-    } catch (e) {
-        console.error('[Passport Auto-Save Exception]:', e)
-    }
-}
 
 async function reroll() {
     chosenStop.value = chooseStop(possibleStops.value)
     stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
     startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
-    
-    // Auto-save new rerolled quest immediately
-    await autoSavePassportEntry()
 }
 
-async function update() {
+// chooseStop can repeat a pick, so call it on a shrinking copy (it still throws when nothing fits).
+function pickTickets(stops) {
+    const left = { ...stops }
+    const picks = []
+    do {
+        const pick = chooseStop(left)
+        picks.push(pick)
+        delete left[pick.destination]
+    } while (picks.length < 3 && Object.keys(left).length)
+    return picks
+}
+
+function chooseTicket(option) {
+    chosenStop.value = option
+    stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
+    startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+}
+
+async function update(){
     submitted.value = true
     errorMessage.value = ''
     chosenStop.value = ''
+    ticketOptions.value = []
     travelTime.value = travelTimeTemp.value
     selectedPlace.value = selectedPlaceTemp.value
 
@@ -81,8 +70,11 @@ async function update() {
         startingStops.value = starts
         let now = Date.now() / 60000
         let arrivals = {}
-        for (let stopCode of Object.keys(starts)) {
-            let busArrivals = await $fetch('/api/busArrivals', { query: { value: stopCode } })
+        // ask LTA for every starting stop at the same time instead of one by one (40 stops took ~10s in a row)
+        let stopCodes = Object.keys(starts)
+        let allArrivals = await Promise.all(stopCodes.map(stopCode => $fetch('/api/busArrivals', { query: { value: stopCode } })))
+        for (let [index, stopCode] of stopCodes.entries()) {
+            let busArrivals = allArrivals[index]
             arrivals[stopCode] = {}
             let timeAtStop = now + starts[stopCode]
             for (let bus of busArrivals.Services || []) {
@@ -102,24 +94,65 @@ async function update() {
         }
         possibleStops.value = filterBusStops(arrivals, travelTime.value, allRoutes.data.value, starts)
         possibleStops.value = filterByAmens(preferences.value, possibleStops.value, amenStops.data.value)
-        chosenStop.value = chooseStop(possibleStops.value)
-        stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
-        startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+        ticketOptions.value = pickTickets(possibleStops.value)
 
-        // Auto-save spin immediately upon successful generation
-        await autoSavePassportEntry()
 
     } catch (e) {
-        errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
+        errorMessage.value = typeof e === 'string' ? e : 'Your spin didn’t go through, so tap Spin again to retry.'
     }
+}
+// guards against double-clicks creating duplicate passport entries
+const savingTrip = ref(false)
+const savedTrip = ref(false)
+watch(chosenStop, () => { savedTrip.value = false })
+
+async function saveTrip(){
+        if (savingTrip.value || savedTrip.value) return
+        savingTrip.value = true
+        try{
+            const {data, error} = await $supabase.from('passport_entries').insert({
+                starting_stop: startDetails.value.Description,
+                end_stop: stopDetails.value.Description,
+                end_stop_code: stopDetails.value.BusStopCode,
+                time_taken: Math.ceil(chosenStop.value.chosen.totalTime),
+                bus_taken:chosenStop.value.chosen.bus,
+                starting_location: selectedPlace.value.ADDRESS
+            })
+            if(error){
+                toast.error(`Couldn’t save your trip: ${error.message}`, { action: { label: 'Retry', run: saveTrip } })
+                return
+            }
+            savedTrip.value = true
+            toast.success('Saved to your passport')
+
+
+        }catch(e){
+            console.log(e)
+            toast.error('Couldn’t save your trip. Check your connection and try again.', { action: { label: 'Retry', run: saveTrip } })
+        }finally{
+            savingTrip.value = false
+        }
+    }
+
+// added for End adventure (boss approved): back to a fresh spin once the adventure ends
+function resetSpin() {
+    submitted.value = false
+    chosenStop.value = ''
+    ticketOptions.value = []
+    errorMessage.value = ''
+    stopDetails.value = ''
+    startDetails.value = ''
 }
 </script>
 
 <template>
     <section class="container py-4 spin-page">
+        <!-- Welcome intro: once per session, right after logging in (or registering, then logging in) -->
+        <BoardingIntro />
         <h1 class="page-title">Spin a side quest</h1>
-        <p class="small-note mb-4">
-            📍 {{ selectedPlace ? `Starting near ${selectedPlace.ADDRESS}` : 'Pick a starting location to begin' }}
+        <p v-if="selectedPlaceTemp" class="start-line">
+            <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
+            Starting near {{ selectedPlaceTemp.ADDRESS }}
         </p>
 
         <div class="spin-layout">
@@ -127,9 +160,11 @@ async function update() {
                 v-model:travel-time="travelTimeTemp"
                 v-model:starting-location="startingLocation"
                 v-model:selected-place="selectedPlaceTemp"
+                :places="locResponse.data.value"
                 :categories="Object.keys(categories)"
                 v-model:preferences="preferences"
-                :places="locResponse.data.value"
+                :busy="submitted && !chosenStop && !ticketOptions.length && !errorMessage"
+                :has-spun="submitted"
                 @submit="update()"
             />
 
@@ -137,10 +172,21 @@ async function update() {
                 :submitted="submitted"
                 :error-message="errorMessage"
                 :chosen-stop="chosenStop"
+                :ticket-options="ticketOptions"
+                :bus-stops="response.data.value ?? []"
                 :stop-details="stopDetails"
                 :start-details="startDetails"
+                :start-place="selectedPlace"
                 :starting-stops="startingStops"
+                :preferences="preferences"
+                :amenities="amenStops.data.value ?? {}"
+                :saving="savingTrip"
+                :saved="savedTrip"
                 @reroll="reroll()"
+                @choose="chooseTicket($event)"
+                @retry="update()"
+                @save-trip="saveTrip()"
+                @end-adventure="resetSpin()"
             />
         </div>
     </section>
@@ -148,25 +194,41 @@ async function update() {
 
 <style scoped>
 .page-title {
-  font-size: 2.4rem;
-  font-weight: 800;
-  color: #141a33;
+  margin: 0 0 var(--sp-5);
+  font-size: var(--fs-title);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.page-title:has(+ .start-line) {
+  margin-bottom: var(--sp-2);
+}
+
+.start-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0 0 var(--sp-5);
+  color: var(--wb-text-2);
+  font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 /* Expanded to 2 columns (340px for filters, remaining width for results) */
 .spin-layout {
   display: grid;
-  grid-template-columns: 340px 1fr;
-  gap: 32px;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--sp-6);
 }
 
 @media (max-width: 991.98px) {
   .spin-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .spin-page {
-    padding-bottom: 120px !important;
+    padding-bottom: 148px !important; /* room for the dock and its helper line */
   }
 }
 </style>

@@ -14,7 +14,7 @@ export function filterByAmens(preferences:any,stops:any,amenStops:any){
             }
         }
     }
-    if (final.length == 0){
+    if (Object.keys(final).length == 0){
         throw 'No stops with preferred activities in range, try a longer travel time or widen your preferences!'
     }
     return final
