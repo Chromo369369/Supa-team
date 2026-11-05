@@ -72,7 +72,7 @@ async function saveTrip(){
                 alert(`Could not save your trip: ${error.message}`)
                 return
             }
-            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
+            toast.success('Saved to your passport')
             
                 
         }catch(e){

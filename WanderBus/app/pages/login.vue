@@ -6,6 +6,7 @@
     const submitting = ref(false)
     const loginError = ref('')
     const {$supabase} = useNuxtApp()
+    definePageMeta({ middleware: 'guest' })
 
 
     async function handleLogin() {
