@@ -37,15 +37,40 @@ export function fakeSession() {
   }
 }
 
+export interface WriteRecord { method: string; table: string; body: unknown }
+export interface RpcRecord { name: string; body: unknown }
+
+/**
+ * Rows for one table: a fixed list, or a function of the writes made so far. The function form lets a
+ * test read back what the page just wrote (e.g. the crew it just hosted) without a real database.
+ */
+export type TableRows = unknown[] | ((writes: WriteRecord[]) => unknown[])
+
 export interface MockOptions {
   signedIn: boolean
-  /** rows returned per table name, e.g. { passport: [...] } */
-  tables: Record<string, unknown[]>
+  /** rows returned per table name, e.g. { passport_entries: [...] } */
+  tables: Record<string, TableRows>
+  /** response body per Postgres function, e.g. { redeem_item: [{ credits: 380, redemption_id: 1 }] } (default []) */
+  rpc: Record<string, unknown>
   /** make /api/* routes fail */
   apiFail: boolean
 }
 
-export interface WriteRecord { method: string; table: string; body: unknown }
+/** body of the last write of `method` to `table`, or undefined */
+export function lastWrite(writes: WriteRecord[], table: string, method = 'POST') {
+  return [...writes].reverse().find((w) => w.table === table && w.method === method)?.body as any
+}
+
+// PostgREST-style `?column=eq.value` filters. A row without that column is kept, so fixtures can stay minimal.
+function applyEqFilters(rows: unknown[], url: URL) {
+  let out = rows
+  for (const [column, raw] of url.searchParams) {
+    if (!raw.startsWith('eq.')) continue
+    const value = raw.slice(3)
+    out = out.filter((row: any) => !(row && typeof row === 'object' && column in row) || String(row[column]) === value)
+  }
+  return out
+}
 
 const CORS = (route: Route) => ({
   'access-control-allow-origin': route.request().headers()['origin'] || '*',
@@ -64,7 +89,12 @@ async function json(route: Route, body: unknown, status = 200) {
 
 export async function installMocks(page: Page, opts: MockOptions) {
   const writes: WriteRecord[] = []
+  const rpcCalls: RpcRecord[] = []
   const apiCalls: string[] = []
+  const rowsFor = (table: string, url: URL) => {
+    const source = opts.tables[table] ?? []
+    return applyEqFilters(typeof source === 'function' ? source(writes) : source, url)
+  }
 
   if (opts.signedIn) {
     const session = fakeSession()
@@ -108,7 +138,13 @@ export async function installMocks(page: Page, opts: MockOptions) {
       return json(route, { Key: 'mock/photo.jpg', publicUrl: 'https://example.com/photo.jpg' })
     }
 
-    if (url.pathname.startsWith('/rest/v1/rpc/')) return json(route, [])
+    if (url.pathname.startsWith('/rest/v1/rpc/')) {
+      const name = url.pathname.replace('/rest/v1/rpc/', '')
+      let body: unknown = null
+      try { body = req.postDataJSON() } catch { /* not json */ }
+      rpcCalls.push({ name, body })
+      return json(route, opts.rpc[name] ?? [])
+    }
 
     if (url.pathname.startsWith('/rest/v1/')) {
       const table = url.pathname.replace('/rest/v1/', '')
@@ -117,9 +153,11 @@ export async function installMocks(page: Page, opts: MockOptions) {
         let body: unknown = null
         try { body = req.postDataJSON() } catch { /* not json */ }
         writes.push({ method, table, body })
+        // a delete answers with the rows it removed (pages check this to spot a blocked delete)
+        if (method === 'DELETE') return json(route, rowsFor(table, url))
         return json(route, Array.isArray(body) ? body : body ? [body] : [], method === 'POST' ? 201 : 200)
       }
-      const rows = opts.tables[table] ?? []
+      const rows = rowsFor(table, url)
       const wantsObject = (req.headers()['accept'] || '').includes('vnd.pgrst.object')
       if (wantsObject) {
         return rows[0] ? json(route, rows[0]) : json(route, { message: 'no rows', code: 'PGRST116' }, 406)
@@ -166,28 +204,33 @@ export async function installMocks(page: Page, opts: MockOptions) {
     route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==', 'base64') }),
   )
 
-  return { writes, apiCalls }
+  return { writes, rpcCalls, apiCalls }
 }
 
 type Fixtures = {
   signedIn: boolean
-  tables: Record<string, unknown[]>
+  tables: Record<string, TableRows>
+  rpc: Record<string, unknown>
   apiFail: boolean
-  mock: { writes: WriteRecord[]; apiCalls: string[] }
+  mock: { writes: WriteRecord[]; rpcCalls: RpcRecord[]; apiCalls: string[] }
 }
 
 /**
  * `test` with an automatic `mock` fixture.
  *   test.use({ signedIn: true })  -> fake logged-in user, protected pages open
- *   test.use({ tables: { passport: [...] } }) -> rows returned for that Supabase table
+ *   test.use({ tables: { passport_entries: [...] } }) -> rows returned for that Supabase table
+ *   test.use({ tables: { groups: (writes) => [...] } }) -> rows worked out from what the page has written
+ *   test.use({ rpc: { redeem_item: [...] } }) -> what a Postgres function returns
+ *   mock.writes / mock.rpcCalls / mock.apiCalls record everything the page sent
  */
 export const test = base.extend<Fixtures>({
   signedIn: [false, { option: true }],
   tables: [{}, { option: true }],
+  rpc: [{}, { option: true }],
   apiFail: [false, { option: true }],
   mock: [
-    async ({ page, signedIn, tables, apiFail }, use) => {
-      const m = await installMocks(page, { signedIn, tables, apiFail })
+    async ({ page, signedIn, tables, rpc, apiFail }, use) => {
+      const m = await installMocks(page, { signedIn, tables, rpc, apiFail })
       await use(m)
     },
     { auto: true },

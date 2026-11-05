@@ -235,11 +235,24 @@ Before it starts, Playwright launches the dev server (`pnpm dev`), or reuses one
 | `unit` | `tests/unit/` | The spin algorithm: walking-distance starting stops, riding bus routes within the time limit, the mood filter, ticket picking. Also distance maths, category tables, the LED font and user colours. |
 | `api` | `tests/api/` | The LTA routes (bus stops, routes, arrivals), the OneMap search route, and the OpenStreetMap routes (amenities, places near a stop, and a clean 4xx for an unknown stop) |
 | `chromium` | `tests/public/` | The landing page (links, sections, mobile menu, no sideways scroll); the login and register forms (validation, wrong credentials, mismatched or short passwords, success state); page redirects for logged-out and logged-in users; header links and logging out |
-| `chromium` | `tests/app/` | The spin page (location search with mouse and keyboard, mood chips, the time dial, filters kept in the URL, spinning, "Spin again", no stops found, the API failing, the phone layout); that passport, profile, group and stop pages load and behave; that browsing never writes to the database or throws an uncaught error |
+| `chromium` | `tests/app/spin.spec.ts`, `pages.spec.ts` | The spin page (location search with mouse and keyboard, mood chips, the time dial, filters kept in the URL, spinning, "Spin again", no stops found, the API failing, the phone layout); that passport, profile, group and stop pages load; that browsing never writes to the database or throws an uncaught error |
 
-The last full run had **136 passed, 0 failed, 3 skipped** (the slow OpenStreetMap tests).
+**User journeys** (`tests/app/*-journey.spec.ts` and friends). Each one walks through what a user actually does, and checks both what's on screen and exactly what was written to the database:
 
-**Not covered yet:** a solo trip from start to finish (tear the ticket, end the adventure, save), the group flow (hosting, joining and spinning together), editing and deleting passport entries, posting signposts and challenges, the shop, and the admin page. We tested these by hand.
+| File | Journey |
+|---|---|
+| `solo-journey.spec.ts` | Spin → take a ticket → tear it → the adventure bar appears → save to the passport (one entry only, even if you click twice) → end the adventure → back to a fresh spin. Ending from another page by holding the bar's button also clears the ticket. The chosen ticket comes back after a reload. Spins and saves are counted once in analytics. |
+| `group-journey.spec.ts` | Host a crew (crew created, host seated, lobby opens with Ready) → host spins and the ticket is shared with the crew. Join with a code → seated as a member, can't spin, can't reroll, can tear and save the host's ticket. Short and unknown codes are rejected without writing anything. **One trip at a time:** solo Spin is blocked while you're in a crew, and hosting or joining is blocked while you hold a solo ticket. |
+| `passport-journey.spec.ts` | Filter stamps by length band and by bus or walk, sort by longest; edit notes and save; unsaved edits ask before they're thrown away; delete asks first, and cancelling keeps the trip. |
+| `stop-community.spec.ts` | Vote a signpost helpful. Who can do what: your own post shows Edit and Delete, someone else's shows neither, and an admin can delete anyone's post (after confirming) but not edit it. |
+| `shop-and-admin.spec.ts` | Claim a shop item (confirm, credits spent through the database function, success message); cancelling spends nothing; too few credits disables Claim. Admin: regular users get no Admin link and are turned away from `/admin`; admins get an Admin link in the header and see monthly analytics split into solo and group, and can approve or reject pending photos. |
+| `responsive.spec.ts` | Every member page fits without scrolling sideways at 375 px (iPhone 6), 768, 992 and 1200 px (Bootstrap XL); the phone header menu opens and navigates. |
+
+**How the tests stay repeatable:** Supabase is replaced by a fake (`tests/helpers/mock.ts`) that records every write, RPC call and API call, so tests check behaviour without a real database. Tables can be worked out from the page's own writes, which lets journeys like "host a crew, then open its lobby" read back what they just created. Selectors use roles, labels and visible text the way a user would find things, not CSS layout. Bus arrival times are relative to the current time, so they never go out of date. Animations are skipped with reduced motion.
+
+The latest full run had **193 passed, 0 failed, 3 skipped** (the slow OpenStreetMap tests), in 1.5–3 minutes, and repeated runs give the same result. Locally the suite runs 4 browsers at once, because one dev server can't keep up with more.
+
+**Tested by hand:** uploading photos, posting and editing signposts and challenges (they need a pin dropped on the map), and live crew updates between two real browsers (Supabase Realtime).
 
 ---
 

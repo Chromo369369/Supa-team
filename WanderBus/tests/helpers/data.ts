@@ -114,3 +114,36 @@ export function passportRow(n: number) {
     photo_url: '',
   }
 }
+
+// ---------- journey fixtures ----------
+
+// Another explorer (a crew host, a signpost author, a photo uploader)
+export const OTHER_USER_ID = '00000000-0000-4000-8000-0000000000aa'
+
+// A crew's shared ticket, shaped like GroupLobby.vue's shareSpin() writes to groups.current_spin
+export const SHARED_SPIN = {
+  chosenStop: { destination: '10003', chosen: { boardAt: '10001', bus: '65', stops: 2, totalTime: 21 } },
+  stopDetails: BUS_STOPS[2],
+  startDetails: BUS_STOPS[0],
+  startingStops: { '10001': 0.5 },
+  preferences: [] as string[],
+  startingAddress: START_PLACE.ADDRESS,
+}
+
+// A signpost row, shaped like supabase/stop_activities.sql's signposts table
+export function signpostRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 7,
+    stop_code: '10003',
+    lat: 1.305,
+    lon: 103.833,
+    note: 'Try the laksa at the corner stall',
+    rating: 4,
+    spent: 6,
+    photo_path: null,
+    user_id: OTHER_USER_ID,
+    author_name: 'Hana',
+    created_at: new Date(Date.now() - 3_600_000).toISOString(),
+    ...overrides,
+  }
+}

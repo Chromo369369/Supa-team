@@ -5,14 +5,24 @@ const {$supabase} = useNuxtApp()
 const adventure = useAdventure()
 const valid_session = ref(false)
 const user_name = ref('')   // picks the avatar's colour, the same one as on the bus pass and signposts
+const is_admin = ref(false) // shows the Admin link; /admin itself checks admin_users again, so this only hides the link
+
+// not awaited by check_session: it runs inside onAuthStateChange, where waiting on more Supabase calls can stall auth
+async function check_admin(userId){
+  const {data, error} = await $supabase.from('admin_users').select('user_id').eq('user_id', userId).maybeSingle()
+  is_admin.value = !error && !!data
+}
+
 async function check_session(event){
   const {data,error} = await $supabase.auth.getUser()
   if(data.user){
     valid_session.value = true
     user_name.value = data.user.user_metadata?.display_name || data.user.email?.split('@')[0] || ''
+    check_admin(data.user.id)
   }else{
     valid_session.value = false
     user_name.value = ''
+    is_admin.value = false
   }
   if (event == 'SIGNED_OUT'){
     adventure.end()   // a running adventure belongs to the account that started it
@@ -65,6 +75,7 @@ onUnmounted(() =>
                         <NuxtLink to="/home" class="header-link" v-if="valid_session">Home</NuxtLink>
                         <NuxtLink to="/group" class="header-link" v-if="valid_session">Group</NuxtLink>
                         <NuxtLink to="/passport" class="header-link" v-if="valid_session">Passport</NuxtLink>
+                        <NuxtLink to="/admin" class="header-link" v-if="valid_session && is_admin">Admin</NuxtLink>
                         <NuxtLink to="/login" class="header-link" v-if="!valid_session">Log in</NuxtLink>
                         <NuxtLink to="/register" class="btn btn-wb-secondary" v-if="!valid_session">Register</NuxtLink>
                         <button type="button" class="header-link" v-if="valid_session" @click="logout()">Log out</button>
