@@ -1,15 +1,47 @@
 <script setup>
 import SpinFilters from '~/components/spin/SpinFilters.vue';
 import SpinResults from '~/components/spin/SpinResults.vue';
+import BoardingIntro from '~/components/landing/BoardingIntro.vue';
 import { filterByAmens } from '~/composables/filterAmens';
 
 const { $supabase } = useNuxtApp()
-
+const toast = useToast()
+const inGroup = ref(false)
 definePageMeta({ middleware: 'auth' })
 
+
+onMounted(async() =>{
+    const {data: {user}} = await $supabase.auth.getUser()
+    
+    if (!user) return
+    const {data: member} = await $supabase.from('group_members').select('user_id').eq('user_id', user.id).maybeSingle()
+    const uid = member?.user_id
+    inGroup.value = !!uid
+    const {data} = await $supabase.from('soloTrip').select('current_trip').eq('user_id',user.id).maybeSingle()
+    const saved = data?.current_trip
+    if (!saved){
+        return
+    }
+    submitted.value = saved.submitted
+    ticketOptions.value = saved.ticketOptions
+    chosenStop.value = saved.chosenStop
+    stopDetails.value = saved.stopDetails
+    startDetails.value = saved.startDetails
+    startingStops.value = saved.startingStops
+    preferences.value = saved.preferences
+    selectedPlace.value = saved.startPlace
+    selectedPlaceTemp.value = saved.startPlace
+
+    soloSpin.value = buildSoloSpin()
+
+})
+
+
+
+const soloSpin = ref(null)
 const amenStops = await useFetch('/api/allAmenities')
 const preferences = ref([])
-const travelTimeTemp = ref(null)
+const travelTimeTemp = ref(60)
 const travelTime = ref(60)
 const startingLocation = ref('')
 const response = await useFetch('/api/allBusStops')
@@ -27,21 +59,67 @@ const stopDetails = ref('')
 const startDetails = ref('')
 const errorMessage = ref('')
 const possibleStops = ref({})
+// Up to 3 different stops for bays A/B/C; picking a bay sets chosenStop.
+const ticketOptions = ref([])
 
+async function soloSave(){
+    const {data: {user}} = await $supabase.auth.getUser()
+    if (!user){return}
+    const { error } = await $supabase.from('soloTrip').upsert({
+        user_id:user.id,
+        current_trip: soloSpin.value
+    })
+    if (error){
+        alert(`Could not save your spin, ${error}`)
+    }
+}    
+
+function buildSoloSpin(){
+    return {
+        
+                submitted: submitted,
+                errorMessage:errorMessage,
+                chosenStop:chosenStop,
+                ticketOptions:ticketOptions,
+                stopDetails:stopDetails,
+                startDetails:startDetails,
+                startPlace:selectedPlace,
+                startingStops:startingStops,
+                preferences:preferences,
+            
+    }
+}
 
 async function reroll() {
     chosenStop.value = chooseStop(possibleStops.value)
     stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
     startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
-    
-    // Auto-save new rerolled quest immediately
-    await autoSavePassportEntry()
+}
+
+// chooseStop can repeat a pick, so call it on a shrinking copy (it still throws when nothing fits).
+function pickTickets(stops) {
+    const left = { ...stops }
+    const picks = []
+    do {
+        const pick = chooseStop(left)
+        picks.push(pick)
+        delete left[pick.destination]
+    } while (picks.length < 3 && Object.keys(left).length)
+    return picks
+}
+
+async function chooseTicket(option) {
+    chosenStop.value = option
+    stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
+    startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+    await soloSave()
 }
 
 async function update(){
     submitted.value = true
     errorMessage.value = ''
     chosenStop.value = ''
+    ticketOptions.value = []
     travelTime.value = travelTimeTemp.value
     selectedPlace.value = selectedPlaceTemp.value
 
@@ -74,16 +152,25 @@ async function update(){
         }
         possibleStops.value = filterBusStops(arrivals, travelTime.value, allRoutes.data.value, starts)
         possibleStops.value = filterByAmens(preferences.value, possibleStops.value, amenStops.data.value)
-        chosenStop.value = chooseStop(possibleStops.value)
-        stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
-        startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+        ticketOptions.value = pickTickets(possibleStops.value)
+        
+        soloSpin.value = buildSoloSpin()
+
+        await soloSave()
 
 
     } catch (e) {
-        errorMessage.value = typeof e === 'string' ? e : 'Something went wrong, please try again.'
+        errorMessage.value = typeof e === 'string' ? e : 'Your spin didn’t go through, so tap Spin again to retry.'
     }
 }
+// guards against double-clicks creating duplicate passport entries
+const savingTrip = ref(false)
+const savedTrip = ref(false)
+watch(chosenStop, () => { savedTrip.value = false })
+
 async function saveTrip(){
+        if (savingTrip.value || savedTrip.value) return
+        savingTrip.value = true
         try{
             const {data, error} = await $supabase.from('passport_entries').insert({
                 starting_stop: startDetails.value.Description,
@@ -93,23 +180,45 @@ async function saveTrip(){
                 starting_location: selectedPlace.value.ADDRESS
             })
             if(error){
-                alert(`Could not save your trip: ${error.message}`)
+                toast.error(`Couldn’t save your trip: ${error.message}`, { action: { label: 'Retry', run: saveTrip } })
                 return
             }
-            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
-            
-                
+            savedTrip.value = true
+            toast.success('Saved to your passport')
+
+
         }catch(e){
             console.log(e)
+            toast.error('Couldn’t save your trip. Check your connection and try again.', { action: { label: 'Retry', run: saveTrip } })
+        }finally{
+            savingTrip.value = false
         }
     }
+
+// added for End adventure (boss approved): back to a fresh spin once the adventure ends
+async function resetSpin() {
+    submitted.value = false
+    chosenStop.value = ''
+    ticketOptions.value = []
+    errorMessage.value = ''
+    stopDetails.value = ''
+    startDetails.value = ''
+    soloSpin.value = null
+    const {data: {user}} = await $supabase.auth.getUser()
+    if (user){
+         const {data} = await $supabase.from('soloTrip').delete().eq('user_id',user.id)
+    }   
+}
 </script>
 
 <template>
     <section class="container py-4 spin-page">
+        <!-- Welcome intro: once per session, right after logging in (or registering, then logging in) -->
+        <BoardingIntro />
         <h1 class="page-title">Spin a side quest</h1>
-        <p class="small-note mb-4">
-            📍 {{ selectedPlace ? `Starting near ${selectedPlace.ADDRESS}` : 'Pick a starting location to begin' }}
+        <p v-if="selectedPlaceTemp" class="start-line">
+            <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
+            Starting near {{ selectedPlaceTemp.ADDRESS }}
         </p>
 
         <div class="spin-layout">
@@ -117,25 +226,58 @@ async function saveTrip(){
                 v-model:travel-time="travelTimeTemp"
                 v-model:starting-location="startingLocation"
                 v-model:selected-place="selectedPlaceTemp"
+                :places="locResponse.data.value"
                 :categories="Object.keys(categories)"
                 v-model:preferences="preferences"
-                :places="locResponse.data.value"
+                :busy="submitted && !chosenStop && !ticketOptions.length && !errorMessage"
+                :has-spun="submitted"
+                :group="inGroup"
                 @submit="update()"
             />
 
             <SpinResults
+                v-if="!soloSpin"
                 :submitted="submitted"
                 :error-message="errorMessage"
                 :chosen-stop="chosenStop"
+                :ticket-options="ticketOptions"
+                :bus-stops="response.data.value ?? []"
                 :stop-details="stopDetails"
                 :start-details="startDetails"
+                :start-place="selectedPlace"
                 :starting-stops="startingStops"
                 :preferences="preferences"
+                :amenities="amenStops.data.value ?? {}"
+                :saving="savingTrip"
+                :saved="savedTrip"
+                :is-member="false"
                 @reroll="reroll()"
+                @choose="chooseTicket($event)"
+                @retry="update()"
+                @save-trip="saveTrip()"
+                @end-adventure="resetSpin()"
             />
-            <SpinSubmit
-                :submitted="submitted && !!chosenStop"
-                @saveTrip="saveTrip()"
+            <SpinResults
+                v-else-if="soloSpin"
+                :submitted="soloSpin.submitted"
+                :error-message="soloSpin.errorMessage"
+                :chosen-stop="soloSpin.chosenStop"
+                :ticket-options="soloSpin.ticketOptions"
+                :bus-stops="response.data.value ?? []"
+                :stop-details="soloSpin.stopDetails"
+                :start-details="soloSpin.startDetails"
+                :start-place="soloSpin.startPlace"
+                :starting-stops="soloSpin.startingStops"
+                :preferences="soloSpin.preferences"
+                :amenities="amenStops.data.value ?? {}"
+                :saving="savingTrip"
+                :saved="savedTrip"
+                :is-member="false"
+                @reroll="reroll()"
+                @choose="chooseTicket($event)"
+                @retry="update()"
+                @save-trip="saveTrip()"
+                @end-adventure="resetSpin()"
             />
         </div>
     </section>
@@ -143,25 +285,41 @@ async function saveTrip(){
 
 <style scoped>
 .page-title {
-  font-size: 2.4rem;
-  font-weight: 800;
-  color: #141a33;
+  margin: 0 0 var(--sp-5);
+  font-size: var(--fs-title);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.page-title:has(+ .start-line) {
+  margin-bottom: var(--sp-2);
+}
+
+.start-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0 0 var(--sp-5);
+  color: var(--wb-text-2);
+  font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 /* Expanded to 2 columns (340px for filters, remaining width for results) */
 .spin-layout {
   display: grid;
-  grid-template-columns: 340px 1fr;
-  gap: 32px;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--sp-6);
 }
 
 @media (max-width: 991.98px) {
   .spin-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .spin-page {
-    padding-bottom: 120px !important;
+    padding-bottom: 148px !important; /* room for the dock and its helper line */
   }
 }
 </style>

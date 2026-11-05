@@ -9,6 +9,7 @@ export const usePlacePhotos = () => {
 
   // place id -> photos (newest first), each with a public url
   const photosByPlace = ref<Record<string, any[]>>({})
+  const loadError = ref('')   // set when the photos couldn't be loaded, so the page can show it with a Retry
 
   function withUrl(row: any) {
     const { data } = $supabase.storage.from(BUCKET).getPublicUrl(row.path)
@@ -17,6 +18,7 @@ export const usePlacePhotos = () => {
 
   // every photo inside the box around the walking circle, in one query
   async function loadPhotosNear(stop: { lat: number, lon: number }, radiusM: number) {
+    loadError.value = ''
     const dLat = radiusM / 111320
     const dLon = radiusM / (111320 * Math.cos(stop.lat * Math.PI / 180))
     const { data, error } = await $supabase
@@ -28,6 +30,7 @@ export const usePlacePhotos = () => {
 
     if (error) {
       console.error('[place photos] load failed:', error.message)
+      loadError.value = error.message
       return
     }
     const grouped: Record<string, any[]> = {}
@@ -75,5 +78,5 @@ export const usePlacePhotos = () => {
     return photo
   }
 
-  return { photosByPlace, loadPhotosNear, uploadPhoto }
+  return { photosByPlace, loadError, loadPhotosNear, uploadPhoto }
 }
