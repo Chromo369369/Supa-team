@@ -66,19 +66,31 @@
         router.replace({ query })
     })
 
+    
     async function handleUpload(place, file) {
         uploadingId.value = place.id
+
         try {
-            const photo = await uploadPhoto(file, place, data.value.stop.code)
-            toast.success(photo.is_pioneer
-                ? `You’re the Pioneer of ${place.name}! +100 credits`
-                : `Thanks! Your photo of ${place.name} is up.`)
+            await uploadPhoto(file, place, data.value.stop.code)
+
+            toast.success(
+                `Photo of ${place.name} submitted! Waiting for admin approval.`
+            )
         } catch (e) {
-            toast.error(`Couldn’t upload your photo of ${place.name}. ${e.message}`, { action: { label: 'Retry', run: () => handleUpload(place, file) } })
+            toast.error(
+                `Couldn't upload your photo of ${place.name}. ${e.message}`,
+                {
+                    action: {
+                        label: 'Retry',
+                        run: () => handleUpload(place, file)
+                    }
+                }
+            )
         } finally {
             uploadingId.value = ''
         }
     }
+
 
     // how many places per section and per sub-filter, and how many signposts/challenges
     const counts = computed(() => {
