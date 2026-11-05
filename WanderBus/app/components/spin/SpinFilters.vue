@@ -21,7 +21,8 @@ const props = defineProps({
     /** A spin is in progress. */
     busy: { type: Boolean, default: false },
     /** The user has spun at least once (button says "Spin again"). */
-    hasSpun: { type: Boolean, default: false }
+    hasSpun: { type: Boolean, default: false },
+    group: Boolean
 })
 
 const emit = defineEmits(['submit'])
@@ -29,9 +30,14 @@ const emit = defineEmits(['submit'])
 const MIN_TIME = 10
 const MAX_TIME = 120
 
-const canSpin = computed(() => !!selectedPlace.value && !!travelTime.value && !props.busy)
+const canSpin = computed(() => !!selectedPlace.value && !!travelTime.value && !props.busy && !props.group)
 // A disabled Spin button explains itself (design.md §2.4).
-const spinHint = computed(() => (!props.busy && !selectedPlace.value ? 'Pick a starting point to spin' : ''))
+const spinHint = computed(() => {
+    if (props.group) return 'You are already in a group, please spin there or exit your group first'
+    if (!props.busy && !selectedPlace.value) return 'Pick a starting point to spin'
+    return ''
+})
+// const spinHint3 = computed(()=> (solo? 'You currently have an active ticket, please end that journey first':''))
 const spinLabel = computed(() => (props.busy ? 'Spinning…' : props.hasSpun ? 'Spin again' : 'Spin'))
 
 const summary = computed(() => {

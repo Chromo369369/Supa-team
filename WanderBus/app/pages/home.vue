@@ -6,12 +6,17 @@ import { filterByAmens } from '~/composables/filterAmens';
 
 const { $supabase } = useNuxtApp()
 const toast = useToast()
-
+const inGroup = ref(false)
 definePageMeta({ middleware: 'auth' })
+
 
 onMounted(async() =>{
     const {data: {user}} = await $supabase.auth.getUser()
+    
     if (!user) return
+    const {data: member} = await $supabase.from('group_members').select('user_id').eq('user_id', user.id).maybeSingle()
+    const uid = member?.user_id
+    inGroup.value = !!uid
     const {data} = await $supabase.from('soloTrip').select('current_trip').eq('user_id',user.id).maybeSingle()
     const saved = data?.current_trip
     if (!saved){
@@ -30,6 +35,8 @@ onMounted(async() =>{
     soloSpin.value = buildSoloSpin()
 
 })
+
+
 
 const soloSpin = ref(null)
 const amenStops = await useFetch('/api/allAmenities')
@@ -224,6 +231,7 @@ async function resetSpin() {
                 v-model:preferences="preferences"
                 :busy="submitted && !chosenStop && !ticketOptions.length && !errorMessage"
                 :has-spun="submitted"
+                :group="inGroup"
                 @submit="update()"
             />
 
@@ -242,6 +250,7 @@ async function resetSpin() {
                 :amenities="amenStops.data.value ?? {}"
                 :saving="savingTrip"
                 :saved="savedTrip"
+                :is-member="false"
                 @reroll="reroll()"
                 @choose="chooseTicket($event)"
                 @retry="update()"
@@ -263,6 +272,7 @@ async function resetSpin() {
                 :amenities="amenStops.data.value ?? {}"
                 :saving="savingTrip"
                 :saved="savedTrip"
+                :is-member="false"
                 @reroll="reroll()"
                 @choose="chooseTicket($event)"
                 @retry="update()"
