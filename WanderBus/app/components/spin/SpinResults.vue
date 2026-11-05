@@ -11,7 +11,7 @@
   reference only; no code was downloaded or ported.
 -->
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, isMemoSame, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LedBoard from '~/components/ui/LedBoard.vue';
 import SpinTicket from '~/components/ui/SpinTicket.vue';
 import SpinSubmit from '~/components/spin/SpinSubmit.vue';
@@ -30,6 +30,7 @@ const props = defineProps({
     saved: Boolean,
     errorMessage: String,
     chosenStop: [Object, String],
+    isMember: Boolean,
     /**
      * Up to 3 different { destination, chosen } picks, one per ticket on the belt. Passing it at all
      * (the home page) turns on the belt: "Spin again" then emits `retry` to run the search again.
@@ -385,7 +386,7 @@ const announcement = computed(() => {
                         >
                             Explore this stop
                         </NuxtLink>
-                        <button type="button" class="btn btn-wb-secondary" @click="spinAgain">
+                        <button type="button" class="btn btn-wb-secondary" @click="spinAgain" :disabled="isMember">
                             <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
                             Spin again
                         </button>
