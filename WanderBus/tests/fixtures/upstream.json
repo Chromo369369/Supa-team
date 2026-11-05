@@ -1,0 +1,30 @@
+{
+  "startingPlace": {
+    "ADDRESS": "E2E TEST LOCATION, SINGAPORE",
+    "LATITUDE": "1.3521",
+    "LONGITUDE": "103.8198",
+    "POSTAL": "000000",
+    "SEARCHVAL": "E2E TEST LOCATION"
+  },
+  "busStops": [
+    { "BusStopCode": "01012", "RoadName": "E2E ROAD", "Description": "E2E Test Stop", "Latitude": 1.3521, "Longitude": 103.8198 },
+    { "BusStopCode": "01013", "RoadName": "E2E ROAD", "Description": "E2E Park Stop", "Latitude": 1.3541, "Longitude": 103.8198 },
+    { "BusStopCode": "01014", "RoadName": "E2E ROAD", "Description": "E2E Museum Stop", "Latitude": 1.3561, "Longitude": 103.8198 },
+    { "BusStopCode": "01015", "RoadName": "E2E ROAD", "Description": "E2E Cafe Stop", "Latitude": 1.3581, "Longitude": 103.8198 }
+  ],
+  "busRoutes": [
+    { "ServiceNo": "88", "Direction": 1, "StopSequence": 1, "BusStopCode": "01012", "Distance": 0 },
+    { "ServiceNo": "88", "Direction": 1, "StopSequence": 2, "BusStopCode": "01013", "Distance": 1 },
+    { "ServiceNo": "88", "Direction": 1, "StopSequence": 3, "BusStopCode": "01014", "Distance": 2 },
+    { "ServiceNo": "88", "Direction": 1, "StopSequence": 4, "BusStopCode": "01015", "Distance": 3 }
+  ],
+  "places": [
+    { "type": "node", "id": 1001, "lat": 1.3524, "lon": 103.8198, "tags": { "name": "E2E Cafe Place", "amenity": "cafe" } },
+    { "type": "node", "id": 1002, "lat": 1.3529, "lon": 103.8198, "tags": { "name": "E2E Park Place", "leisure": "park" } },
+    { "type": "node", "id": 1003, "lat": 1.3534, "lon": 103.8198, "tags": { "name": "E2E Museum Place", "tourism": "museum" } },
+    { "type": "node", "id": 1004, "lat": 1.3539, "lon": 103.8198, "tags": { "name": "E2E Gallery Place", "tourism": "gallery" } },
+    { "type": "node", "id": 1005, "lat": 1.3544, "lon": 103.8198, "tags": { "name": "E2E Attraction Place", "tourism": "attraction" } },
+    { "type": "node", "id": 1006, "lat": 1.3549, "lon": 103.8198, "tags": { "name": "E2E Mall Place", "shop": "mall" } },
+    { "type": "node", "id": 1007, "lat": 1.3554, "lon": 103.8198, "tags": { "name": "E2E Food Place", "amenity": "restaurant" } }
+  ]
+}
