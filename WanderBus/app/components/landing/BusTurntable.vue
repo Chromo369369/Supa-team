@@ -1,30 +1,3 @@
-<!--
-  BusTurntable: the landing features section (replaces LandingFeatures). A tall section with a
-  sticky stage: as you scroll, the 3D bus (Bus3D) turns through five poses, and the feature that
-  goes with each pose crossfades in beside it. Original WanderBus component, no ported source.
-
-  Poses (rotation in degrees; one continuous turn, so every step is short)
-    1  side A, 3/4          { x: -10, y: -22 }   Spin for a stop
-    2  front, 3/4           { x: -8,  y: -72 }   Around the stop
-    3  side B, door open    { x: -10, y: -196 }  Signposts and challenges
-    4  roof, from above     { x: -74, y: -180 }  Explore together
-    5  back, 3/4            { x: -10, y: -252 }  Passport
-
-  Scroll: a passive scroll listener, throttled with requestAnimationFrame, runs only while the
-  scene is in view (IntersectionObserver). Progress through the scene maps to a position 0–4 along
-  the poses; each pose holds for a while, then eases (smoothstep) into the next. No library.
-
-  Layout: desktop puts the text on the left and the bus on the right, phones (≤ 767px) stack the
-  bus above the text with a shorter scroll (300svh instead of 500svh). In the scene the h2 sits in
-  the sticky stage and the intro pairs with the first pose.
-
-  Accessibility: in the scene the visual crossfade stack is aria-hidden (inactive blocks are also
-  visibility: hidden once faded) and a visually-hidden list carries the intro and all five features
-  with their h3s, always
-  readable. The bus and the progress bar are decorative.
-  Under reduced motion (or before the script runs) there is no sticky scene: five static rows, each
-  with the bus at a fixed angle.
--->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Bus3D from '~/components/ui/Bus3D.vue'

@@ -1,59 +1,3 @@
-<!--
-  StampCarousel: the passport as a wall of glossy rubber stamps (design.md §4.5). One stamp per
-  saved trip, all on one full-height stage with three phases:
-    1. Scatter wall: every stamp lies loose and slightly turned across the stage, so many trips
-       show at once.
-    2. Cascade: scrolling the page through the stage (the stage stays pinned while it morphs), or
-       pressing "Line them up", gathers the stamps into the slanted cascade line.
-    3. Zoom: choosing a stamp (click, swipe, Previous / Next, the arrow keys) zooms it, centred
-       right, and its details open top left: stop name, bus, from, set off, time taken, date,
-       the note, then the page's editor and Edit / Delete trip buttons (slots).
-
-  Ported to Vue 3 from two 21st.dev components, used as part of this application only:
-  - "3D CD Disc Carousel" (Disc Cascade Carousel) by kedhareswer, component id 35505,
-    https://21st.dev/kedhareswer/disc-cascade-carousel. Kept: the cascade pose maths (spacing,
-    rise, depth, yaw, fan, tilt and roll per step), the gloss (back-set edge, soft shade, conic
-    sheen glint driven by pointer and yaw with mix-blend-mode: screen, inset highlight rings, the
-    chosen disc leaning toward the pointer by up to 12 degrees), the seeded PRNG, the top-left
-    details head and the bottom-right controls.
-  - "Scroll Morph Hero" by prashantsom75, component id 9583,
-    https://21st.dev/@prashantsom75/components/scroll-morph-hero. Kept: the scatter-to-formation
-    morph (each item lerps from its scatter pose to its formation pose by one morph value), driven
-    by scroll progress and smoothed with the source's spring (stiffness 40, damping 20).
-  Changes for WanderBus: Vue SFC with no React, Tailwind or framer-motion; real page scroll through
-  a sticky stage instead of a captured wheel; the scatter is a seeded, jittered grid (from the trip
-  id) instead of Math.random, and the circle and arc phases become the disc cascade; CDs become ink
-  stamps with a scalloped edge and no centre hole or hub; the details head shows trip facts with
-  spacing and tone steps instead of hairline rows; no wordmark, nav, index menu, frame, press
-  quotes or autoplay; CSS transitions on --ease between poses; 44px controls; tokens from main.css
-  only.
-  Round 2 (boss, 5 Nov 2026):
-  - Centre art is the trip photo clipped to the inner circle; with no photo, a still WanderMascot
-    (no gaze, blink or motion) on a flat tint, its colour picked from the trip id. The source's
-    seven generated label patterns are removed, and so is the opaque centre plate.
-  - Rim text: the stop name on the top arc, "BUS 12 · 5 NOV" or "ON FOOT · 5 NOV" upright on the
-    bottom arc; WANDERBUS joins the top line only for short names (see the rim layout note).
-  - Notes are set in the app font (--font-ui) at 16px instead of the handwriting face.
-  Tier 2 (design.md §5, "Crumple delete"): a deleted trip's stamp crumples (SVG displacement
-  filter plus a squash and twist, about 450ms), then falls. This replaces the simple fall; under
-  reduced motion it only fades.
-
-  Props
-    items   passport_entries rows (id, end_stop, end_stop_code, entry_time, bus_taken, starting_stop,
-            starting_location, time_taken, entry_notes, photo_url)
-    label   accessible name of the carousel
-  Slots (scoped, { item, index })
-    editor    the in-place editor for that trip
-    actions   buttons under the details (Edit / Delete trip live in the page)
-
-  Accessibility: APG carousel pattern. The root is aria-roledescription="carousel"; the details
-  panel is the slide ("2 of 5: Blk 55"). Left / Right / Home / End move between trips while focus
-  is in the carousel (never from inside a form field) and Escape closes the details. Previous /
-  Next are 44px buttons. Nothing plays on its own. Changes are announced through a polite status
-  line. Pointer effects (tilt, glint) only follow a fine pointer. Under prefers-reduced-motion
-  there is no scatter, morph, deal-in, roll or crumple: the stamps start in the cascade with the
-  first trip open, every change is instant, and a deleted stamp fades out.
--->
 <script setup>
 import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, useId, watch } from 'vue'
 import { useMotionPrefs } from '~/composables/usePointer'
@@ -173,13 +117,11 @@ const mounted = ref(false)
 /* ── phases: scatter → cascade (lined) → zoom ── */
 const lined = ref(false)        // latched once the morph completes, or by "Line them up"
 const zoomed = ref(false)       // the chosen stamp is zoomed and its details are open
-const scrollMorph = ref(0)      // 0..1 from the page scroll through the pinned stage
 const morph = ref(0)            // the smoothed value every pose lerps by
 const springing = ref(false)
 
 const canScatter = computed(() => mounted.value && !reducedMotion.value && n.value > 1)
-const scrollMorphOn = computed(() => canScatter.value && !lined.value)
-const morphTarget = computed(() => (scrollMorphOn.value ? scrollMorph.value : 1))
+const morphTarget = computed(() => (canScatter.value && !lined.value ? 0 : 1))
 const phase = computed(() => (morph.value < 0.985 ? 'scatter' : zoomed.value ? 'zoom' : 'cascade'))
 const showDetails = computed(() => phase.value === 'zoom' && !!active.value)
 
@@ -217,58 +159,62 @@ function kick() {
 }
 watch(morphTarget, kick)
 
-/* Line up or scatter, keeping the stage where it is on screen while the scroll track changes. */
-async function setLined(v) {
+/* Line up or scatter; the spring on morphTarget animates the change. */
+function setLined(v) {
   if (lined.value === v) return
-  const before = stage.value?.getBoundingClientRect().top
   lined.value = v
-  if (!v) {
-    zoomed.value = false
-    scrollMorph.value = 0
-  }
-  await nextTick()
-  const el = stage.value
-  if (!el || before == null) return
-  if (v) {
-    const after = el.getBoundingClientRect().top
-    if (Math.abs(after - before) > 1) window.scrollBy({ top: after - before, behavior: 'instant' })
-  } else {
-    // Back to the top of the track, so the scroll morph starts again from the wall.
-    const stick = parseFloat(getComputedStyle(el).top) || 0
-    const top = track.value?.getBoundingClientRect().top ?? 0
-    if (top < stick - 1) window.scrollBy({ top: top - stick, behavior: 'instant' })
-    readScroll()
-  }
+  if (!v) zoomed.value = false
 }
 const toggleLined = () => setLined(!lined.value)
 
-/* ── scroll progress through the pinned stage ── */
-let scrollFrame = 0
-function readScroll() {
-  scrollFrame = 0
-  if (!scrollMorphOn.value || !track.value || !stage.value) return
-  const travel = track.value.offsetHeight - stage.value.offsetHeight
-  if (travel <= 0) return
-  const stick = parseFloat(getComputedStyle(stage.value).top) || 0
-  const p = clamp((stick - track.value.getBoundingClientRect().top) / travel, 0, 1)
-  const t = clamp(p / 0.85, 0, 1)
-  scrollMorph.value = t * t * (3 - 2 * t)
-  if (p >= 0.999) setLined(true)
-}
-function onScroll() {
-  if (!scrollFrame) scrollFrame = requestAnimationFrame(readScroll)
-}
-watch(scrollMorphOn, (on) => {
-  if (typeof window === 'undefined') return
-  if (on) {
-    window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onScroll, { passive: true })
-    nextTick(readScroll)
-  } else {
-    window.removeEventListener('scroll', onScroll)
-    window.removeEventListener('resize', onScroll)
+/* ── mouse wheel: scatter ⇄ line ⇄ trip by trip, while the stage is in view ── */
+const WHEEL_STEP = 60       // px of wheel travel per step
+const WHEEL_LOCK = 350      // ms after a step that further wheel events are eaten (trackpad momentum)
+let wheelAcc = 0
+let wheelLockUntil = 0
+function onWheel(e) {
+  if (e.ctrlKey) return
+  const t = e.target
+  if (t instanceof Element && t.closest('input, textarea, select, .sc-details')) return
+  // Only capture while the stage is (nearly) fully on screen; otherwise the page scrolls normally.
+  const el = stage.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  const seen = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0)
+  if (r.height <= 0 || seen / r.height < 0.9) {
+    wheelAcc = 0
+    return
   }
-})
+  if (performance.now() < wheelLockUntil) {
+    e.preventDefault()
+    return
+  }
+  let delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX
+  if (e.deltaMode === 1) delta *= 16
+  else if (e.deltaMode === 2) delta *= window.innerHeight
+  if (!delta) return
+  if (Math.sign(delta) !== Math.sign(wheelAcc)) wheelAcc = 0
+  wheelAcc += delta
+  const forward = wheelAcc > 0
+  const inScatter = !lined.value && canScatter.value
+  // Whether this direction has a step to take here; if not, release to the page.
+  const canStep = forward
+    ? inScatter || index.value < n.value - 1
+    : lined.value && (index.value > 0 || canScatter.value)
+  if (!canStep) {
+    wheelAcc = 0
+    return
+  }
+  e.preventDefault()
+  if (Math.abs(wheelAcc) < WHEEL_STEP) return
+  if (forward) {
+    if (inScatter) setLined(true)
+    else next()
+  } else if (index.value > 0) prev()
+  else setLined(false)
+  wheelAcc = 0
+  wheelLockUntil = performance.now() + WHEEL_LOCK
+}
 
 /* ── stage size ── */
 const size = reactive({ w: 960, h: 640 })
@@ -295,10 +241,11 @@ onMounted(() => {
     sizeObserver = new ResizeObserver(([e]) => {
       size.w = e.contentRect.width
       size.h = e.contentRect.height
-      onScroll()
     })
     sizeObserver.observe(scene.value)
   }
+  // Non-passive, so the wheel can be captured while the stage is in view.
+  scene.value?.addEventListener('wheel', onWheel, { passive: false })
 })
 watch(reducedMotion, (on) => {
   if (on) {
@@ -308,12 +255,10 @@ watch(reducedMotion, (on) => {
 })
 onBeforeUnmount(() => {
   if (raf) cancelAnimationFrame(raf)
-  if (scrollFrame) cancelAnimationFrame(scrollFrame)
   if (crumpleRaf) cancelAnimationFrame(crumpleRaf)
   sizeObserver?.disconnect()
   noteObserver?.disconnect()
-  window.removeEventListener('scroll', onScroll)
-  window.removeEventListener('resize', onScroll)
+  scene.value?.removeEventListener('wheel', onWheel)
 })
 
 /* ── poses ── */
@@ -702,16 +647,6 @@ function mascotArt(color, tint) {
   ]
 }
 
-/*
-  Rim layout (200-unit stamp; ink rings at r 86 and 80 outside, the dashed ring at r 65.5 inside):
-  - Top arc, r 70, 200 degrees over the top, read left to right: the stop name. WANDERBUS is added
-    after it only when the name is 12 characters or fewer, so the whole line fits without squeezing.
-  - Bottom arc, r 77, 140 degrees under the bottom, drawn left to right the short way round so the
-    letters stand upright (their tops point at the centre): "BUS 12 · 5 NOV" or "ON FOOT · 5 NOV".
-  - A 10 degree gap and an ink dot at each side keep the two lines apart.
-  - A line longer than its arc is squeezed to fit (textLength); stop names over 32 characters are
-    cut with an ellipsis first, so the type never drops below about 70% of its width.
-*/
 const RIM_FS = 12.5
 const CHAR_W = RIM_FS * 0.72 // a capital plus the .12em tracking, measured loosely for Lexend Deca
 const polar = (r, deg) => {
@@ -866,7 +801,7 @@ const StampFace = {
       </div>
     </div>
 
-    <div ref="track" class="sc-track" :class="{ 'is-scroll-morph': scrollMorphOn }">
+    <div ref="track" class="sc-track">
       <div
         ref="stage"
         class="sc-stage"
@@ -1052,12 +987,9 @@ const StampFace = {
   min-width: 0;
 }
 
-/* ── The pinned stage and its scroll track ── */
+/* ── The stage and its wrapper ── */
 .sc-track {
   position: relative;
-}
-.sc-track.is-scroll-morph {
-  height: calc(var(--sc-h) + 90dvh);
 }
 .sc-stage {
   position: relative;
@@ -1068,10 +1000,6 @@ const StampFace = {
   overflow: hidden;
   border-radius: var(--r-card);
   background: var(--wb-surface-2);
-}
-.is-scroll-morph > .sc-stage {
-  position: sticky;
-  top: calc(var(--header-h) + var(--sp-2));
 }
 
 .sc-scene {
@@ -1093,10 +1021,14 @@ const StampFace = {
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
+  /* The root sits at z=0, so stamps with negative translateZ fall behind its empty box when
+     hit-testing; let events pass through it and catch them on the stamps (they still bubble to the scene). */
+  pointer-events: none;
 }
 
 /* ── One stamp ── */
 .sc-disc {
+  pointer-events: auto;
   position: absolute;
   left: calc(50% - var(--sc-s) / 2);
   top: calc(50% - var(--sc-s) / 2);

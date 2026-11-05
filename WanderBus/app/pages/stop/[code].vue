@@ -1101,7 +1101,11 @@
   align-items: start;
 }
 
+/* position: relative makes the list the containing block for the cards' absolutely positioned
+   .visually-hidden spans, so its overflow clips them; otherwise they escape the 520px scroll box and
+   stretch the page past the footer (the blank space under it) */
 .place-list {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);

@@ -1,23 +1,3 @@
-<!--
-  BusStopPole: the landing page's bus stop (design.md §4.1). A flat SVG pole whose LED sign is a
-  real button. Tapping it plays the boarding sequence, then goes to sign-up (or /home with a
-  session). Original WanderBus drawing, no ported source.
-
-  Props
-    tone   ground | ink: colours for the light hero or the navy CTA band   (default ground)
-
-  Sequence (about 2.4 s)
-    1. The LED flips to BOARDING and "Boarding…" is announced politely.
-    2. BusDriveBy `arrive` pulls up under the sign (1270 ms).
-    3. The mascot waves from the moment the bus stops.
-    4. A short beat, then BusDriveBy `depart` (950 ms).
-    5. navigateTo('/register'), or '/home' when checkSession() finds a user.
-  "Skip the ride", any key, or a second tap on the sign goes straight to the route.
-  Under reduced motion it goes straight to the route.
-
-  The session is read with the existing checkSession composable (read-only), started on the tap
-  so the network call runs while the bus drives.
--->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { navigateTo, useNuxtApp } from '#imports'

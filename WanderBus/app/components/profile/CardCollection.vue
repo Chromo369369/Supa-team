@@ -1,32 +1,3 @@
-<!--
-  CardCollection: the profile's collectible cards (supabase/cards.sql), drawn as a grid of
-  trading cards in 5:7 portrait.
-
-  On mount it loads the catalogue, then asks the database for any cards you've earned but don't
-  have yet (claimUnlocks). Each new card gets a "New card: <name>" toast, and the confetti fires
-  once for the batch.
-
-  Unlocked cards take their rarity's colour all over (--wb-rarity-*): the art sits on the rarity
-  tint (or a still mascot in the rarity colour does), then the name and a solid rarity band with
-  the rarity word. Common is grey, rare blue, epic plum, legendary gold.
-
-  Holo effect (a hand-built Vue port of the reactbits holo-card behaviour), unlocked cards only, in
-  the grid and on the dialog's large card. The pointer sets --mx/--my (position, %) and --rx/--ry
-  (tilt, max 12deg), rAF-throttled and reset on pointerleave; only transform, opacity and
-  background-position move. Tiers: common none; rare tilt + glare; epic tilt + glare + foil
-  (a rainbow sheen, color-dodge, shifted by the pointer); legendary the same with a gold foil and a
-  slow idle shimmer. Under reduced motion and on (hover: none) devices there's no tilt and no glare,
-  and the foil stays still. Locked cards: a dashed outline, the name and how to
-  unlock it ("Save 5 trips", "Buy it in the shop"). Every card is a button that opens a native
-  <dialog> with a larger card, the description and the date it was collected; Esc or Close shuts
-  it and focus goes back to the card.
-
-  States (design.md §3.3): loading keeps the grid with flat placeholder cards, an empty catalogue
-  gets one sentence, and a failed load (e.g. the tables aren't there yet) says what failed with
-  a Retry.
-
-  Exposes `reload()` (= load()) so the page can refresh it, e.g. after the shop hands out a card.
--->
 <script setup>
 import WanderMascot from '~/components/ui/WanderMascot.vue'
 import ConfettiBurst from '~/components/ui/ConfettiBurst.vue'

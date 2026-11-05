@@ -1,24 +1,3 @@
-<!--
-  BusPassCard: the profile "bus pass" (design.md §5). One card shaped like a fare card: the
-  WanderBus mark and the mascot "photo" on the left, the holder's name, Pioneer credits and four
-  counts on the right. Laid out across on desktop, stacked on phones. Read-only.
-
-  Props
-    name     display name
-    userId   the holder's id (the mascot colour comes from name, see passColors below)
-    stats    { trips, signposts, challenges_done, pioneer_photos, credits } or null
-    loading  shows the card in its own shape with grey bars where the values go (§11 of the
-             app-screen rules: labels stay, values become flat bars at their real size)
-
-  Rewards (useRewards): the mascot wears the captain's cap when that look is equipped, and the
-  pass turns night-ink (.pass-night) with perk-pass-night. This is always your own pass.
-  Badges (useBadges): the badges you've earned sit under your name (locked ones are hidden). On
-  mount the pass calls claim() once, which toasts "New badge: X" for anything newly earned.
-  Welcome bonus: the first time a credit figure shows here, a one-time "Welcome aboard" toast
-  (remembered per browser under localStorage wb-welcome-seen).
-
-  Also exports passColors(id), so the header avatar wears the same colour.
--->
 <script>
 import { userColor } from '~/utils/userColor'
 
@@ -213,17 +192,26 @@ function show(key) {
   color: var(--wb-muted);
 }
 
+/* Each label stays on one line with its number centred under it; the row sizes to its labels
+   and wraps whole counts (never a label) when the pass is narrow */
 .pass-counts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-4);
   margin: 0;
 }
 
 .count {
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--sp-1);
+  text-align: center;
+}
+
+.count .stat-label {
+  white-space: nowrap;
 }
 
 .count-value {
@@ -303,6 +291,7 @@ function show(key) {
     min-height: 128px;
   }
   .pass-counts {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

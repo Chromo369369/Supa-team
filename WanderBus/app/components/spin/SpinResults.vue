@@ -1,15 +1,3 @@
-<!--
-  Spin results: the LED board and one stage that walks through the F1 states (design.md §3.3, §4.3).
-    idle       parked bus, the mascot waiting at the stop (eyes follow the pointer)
-    searching  the bus idles in place while live arrivals load
-    bays       up to three face-down tickets A/B/C ride a belt (TicketBelt); pick one and it flies here
-    ticket     the picked ticket slides up into the slot (420 ms), then the tear runs; confetti on the tear
-    torn       a boarding pass: from → to, the legs, what's within 1 km, the total and the actions
-    no result  the bus breaks down, with a Retry button that runs the same search again
-  Nothing about the trip shows before the tear: the belt only gets each ticket's letter and minutes.
-  Boarding-pass layout loosely after 21st "Ticket Confirmation Card" (id 6492), as a layout
-  reference only; no code was downloaded or ported.
--->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LedBoard from '~/components/ui/LedBoard.vue';
@@ -393,12 +381,6 @@ const announcement = computed(() => {
                             <SpinSubmit :submitted="true" :saving="saving" :saved="saved" @save-trip="$emit('saveTrip')" />
                         </span>
                     </div>
-                    <div v-if="usesBelt" class="end-row">
-                        <button type="button" class="btn btn-wb-ghost" @click="adventure.endPrompt.value = true">
-                            <i class="bi bi-flag" aria-hidden="true"></i>
-                            End adventure
-                        </button>
-                    </div>
                 </template>
             </template>
         </div>
@@ -734,13 +716,6 @@ const announcement = computed(() => {
   justify-content: center;
   gap: var(--sp-3);
   margin-top: 28px;
-}
-
-/* Ending is the quiet way out: below the trip actions, on its own line */
-.end-row {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--sp-3);
 }
 
 /* Saved: the button lands like a passport stamp (scale 1.15 → 1, 250 ms) */

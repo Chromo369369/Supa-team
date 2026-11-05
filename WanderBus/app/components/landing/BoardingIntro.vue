@@ -1,37 +1,3 @@
-<!--
-  BoardingIntro: the once-per-session welcome intro (plan Tier 1.5, Wave 1 A).
-  Shown on /home, so it plays right after someone registers and logs in, or logs in again in a
-  new session, and then lifts away onto the home page (boss, 5 Nov 2026; it used to open the landing).
-  Idea inspired by the "ghost builds itself from parts" animation by Nicolas Jesenberger
-  (recent.design). Original WanderBus drawing and code, nothing ported.
-
-  Sequence
-    0 ms      the overlay opens on ink; the ink layer fades out to ground over 1.2 s
-    0–420     the orb body pops in (spring), then its shine
-    380–800   the capsule eyes open
-    700–1200  the smile draws in, the nub arms slide in from the sides
-    1250      the road appears: a mini bus, a stop marker, "Drag the bus to the stop", "Board the bus"
-    on board  the bus pulls up at the stop, the WanderBus mark is revealed (scale + circular clip),
-              the mascot hops (happy) then waves
-    +1500     the overlay lifts away (translateY + opacity, 420 ms) and focus moves to the parent's h1
-              (or #main when the parent doesn't handle `close`)
-
-  Ways through
-    - drag the bus (Pointer Events, mouse, pen and touch, with pointer capture) and drop it near the stop
-    - "Board the bus" button, or Enter / Space on the focused bus
-    - "Skip intro" (always visible) or Esc: lifts the overlay away at once
-    During the reveal, Skip or Esc goes straight to the lift; nothing queues.
-
-  Rules
-    - Plays once per browser session (sessionStorage `wb-intro-seen`, every access in try/catch;
-      if storage throws, it plays once per page load). Never shown under reduced motion.
-    - `?intro=off` skips it; `?intro=on` forces it even if already seen (not under reduced motion).
-    - Renders nothing on the server; decided in onMounted. Teleported to <body>.
-    - role="dialog" aria-modal, focus trapped inside, body scroll locked and restored.
-    - Animates transform, opacity and clip-path only.
-
-  Emits `close` once the overlay has gone (only if it was shown), so the parent can focus its h1.
--->
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WanderMascot, { type MascotMood } from '~/components/ui/WanderMascot.vue'

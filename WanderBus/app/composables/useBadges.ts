@@ -1,18 +1,3 @@
-// Badges people earn by riding (supabase/rewards.sql: badges, user_badges, claim_badges()).
-// Cached app-wide with useState, so the bus pass, signposts and crew seats share one copy.
-//
-//   const badges = useBadges()
-//   catalog          every badge in sort_order: [{ id, name, description, icon, sort_order }]
-//   mine             the badges you've earned, best first (same shape plus earned_at)
-//   forUsers(ids)    batch-fetch other people's badges (cached); resolves to { [userId]: Badge[] }
-//   bestOf(userId)   that person's best badge from the cache (lowest sort_order), or null
-//   claim()          ask the database to award anything you've newly earned; toasts
-//                    "New badge: X" for each and refreshes mine. Resolves to the new ids.
-//   load()           fetch the catalog and mine again
-//
-// Badge icons are Bootstrap Icons classes (e.g. 'bi-compass'). Every failure degrades quietly
-// (the tables don't exist until rewards.sql has run): the lists stay empty and nothing shows.
-
 export interface Badge {
   id: string
   name: string

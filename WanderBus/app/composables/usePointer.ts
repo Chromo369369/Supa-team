@@ -1,15 +1,3 @@
-// Shared pointer + motion preferences (design.md §3.1).
-//
-// One `pointermove` listener on window serves every mascot. It is throttled with
-// requestAnimationFrame, added when the first consumer mounts and removed when the last one
-// unmounts. Nothing touches `window` on the server.
-//
-//   const prefs = useMotionPrefs()                      // { reducedMotion, coarsePointer }
-//   const pointer = usePointer({ active: () => wantsIt }) // { x, y, hasMoved, lastMove, idle }
-//
-// `idle` turns true after POINTER_IDLE_MS without movement and back to false on the next move.
-// Touch pointers are ignored, so a finger drag never steers anyone's gaze.
-
 import { computed, onBeforeUnmount, onMounted, readonly, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 
 export const POINTER_IDLE_MS = 10_000

@@ -1,6 +1,6 @@
 <!--
   End adventure dialog (F1). Mounted once in layouts/default.vue, opened through useAdventure().endPrompt
-  (by AdventureBar or SpinResults' End adventure). Native <dialog>: focus stays inside, Esc keeps exploring,
+  (by AdventureBar's hold-to-end). Native <dialog>: focus stays inside, Esc keeps exploring,
   and focus goes back to the button that opened it (or to <main> when that button is gone after End).
   Shows the trip like a passport stamp, with optional notes and a photo (shrunk by utils/compressImage), then Save to passport / End without saving /
   Keep exploring. A trip already saved from the ticket says so instead of offering a second save.
@@ -8,6 +8,7 @@
 <script setup lang="ts">
 const { session, active, elapsed, endPrompt, end, save } = useAdventure()
 const toast = useToast()
+const { confirm } = useConfirm()
 
 const dialog = ref<HTMLDialogElement | null>(null)
 const keepBtn = ref<HTMLButtonElement | null>(null)
@@ -119,7 +120,17 @@ async function onSave() {
   }
 }
 
-function endWithoutSaving() {
+// a typed note or picked photo would be lost, so ask first; with neither, end straight away
+async function endWithoutSaving() {
+  if (!saved.value && (notes.value.trim() || photo.value)) {
+    const ok = await confirm({
+      title: 'End without saving?',
+      body: 'Your note and photo won’t be saved.',
+      confirmLabel: 'End without saving',
+      danger: true,
+    })
+    if (!ok) return
+  }
   end()
 }
 </script>
@@ -222,21 +233,23 @@ function endWithoutSaving() {
       </template>
 
       <div class="adv-end-actions">
-        <button ref="keepBtn" type="button" class="btn-wb-ghost" :disabled="saving" @click="close">
+        <button ref="keepBtn" type="button" class="btn-wb adv-keep" :disabled="saving" @click="close">
           Keep exploring
         </button>
-        <template v-if="saved">
-          <NuxtLink to="/passport" class="btn-wb-secondary" @click="close">View passport</NuxtLink>
-          <button type="button" class="btn-wb-primary" @click="endWithoutSaving">End adventure</button>
-        </template>
-        <template v-else>
-          <button type="button" class="btn-wb-secondary" :disabled="saving" @click="endWithoutSaving">
-            End without saving
-          </button>
-          <button type="button" class="btn-wb-primary" :aria-busy="saving" :disabled="saving || photoBusy" @click="onSave">
-            {{ saving ? 'Saving…' : saveError ? 'Try again' : 'Save to passport' }}
-          </button>
-        </template>
+        <div class="adv-end-row">
+          <template v-if="saved">
+            <NuxtLink to="/passport" class="btn-wb-secondary" @click="close">View passport</NuxtLink>
+            <button type="button" class="btn-wb-primary" @click="endWithoutSaving">End adventure</button>
+          </template>
+          <template v-else>
+            <button type="button" class="btn-wb-danger" :disabled="saving" @click="endWithoutSaving">
+              End without saving
+            </button>
+            <button type="button" class="btn-wb-primary" :aria-busy="saving" :disabled="saving || photoBusy" @click="onSave">
+              {{ saving ? 'Saving…' : saveError ? 'Try again' : 'Save to passport' }}
+            </button>
+          </template>
+        </div>
       </div>
     </div>
   </dialog>
@@ -368,13 +381,26 @@ function endWithoutSaving() {
 
 .adv-end-actions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: var(--sp-3);
   margin-top: var(--sp-5);
 }
 
+/* Keep exploring: a neutral grey fill on its own row, the two real choices share the row below */
+.adv-keep {
+  width: 100%;
+  background: var(--wb-surface-2);
+  color: var(--wb-ink);
+}
+.adv-keep:hover { background: var(--wb-surface-2); color: var(--wb-ink); }
+
+.adv-end-row {
+  display: flex;
+  gap: var(--sp-3);
+}
+.adv-end-row > * { flex: 1; min-width: 0; }
+
 @media (max-width: 479.98px) {
-  .adv-end-actions { flex-direction: column-reverse; align-items: stretch; }
+  .adv-end-row { flex-direction: column; }
 }
 </style>

@@ -1,19 +1,3 @@
-<!--
-  ConfettiBurst: a one-shot fan of paper confetti from a point on screen.
-
-  Visual reference: 21st.dev "Motion Confetti" (motiondotdev/motion-confetti). Rebuilt for WanderBus
-  from how its preview behaves; no code was downloaded or ported. Pieces shoot up in a fan with
-  spin, slow down under air drag, then fall with gravity; ribbons flutter (rotateX) and squares
-  wobble (rotateY) and sway as they drop, fading out near the end.
-
-  About 60 pooled DOM pieces, animated with WAAPI on transform and opacity only, coloured from
-  --wb-green, --wb-amber and the --cat-* tokens. A fixed, pointer-events:none overlay teleported to
-  <body> (client only), aria-hidden. Under reduced motion fire() does nothing.
-
-  API
-    fire({ x, y })   exposed; client coordinates of the burst origin
-    count            number of pooled pieces (default 60)
--->
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useMotionPrefs } from '~/composables/usePointer'
