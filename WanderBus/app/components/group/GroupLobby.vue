@@ -72,7 +72,7 @@ async function saveTrip(){
                 alert(`Could not save your trip: ${error.message}`)
                 return
             }
-            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
+            toast.success('Saved to your passport')
             
                 
         }catch(e){
@@ -287,7 +287,7 @@ async function copyCode() {
           <div class="waiting-box" aria-live="polite">
             <span v-if="loadingMembers">Loading your crew…</span>
             <span v-else-if="membersError" role="alert">{{ membersError }}</span>
-            <span v-else-if="!hostLeft && groupMembers.length == 0">
+            <span v-else-if="!hostLeft && groupMembers.length == 0" :disabled="!isHost">
               Waiting for friends to join…
             </span>
           </div>
@@ -318,7 +318,7 @@ async function copyCode() {
             <button
               type="button"
               class="btn-wb-primary lobby-button ready-button"
-              :disabled="!isHost && !sharedSpin"
+              :disabled="!isHost || !sharedSpin"
               :hidden="isHost"
               @click="ready=true"
             >
