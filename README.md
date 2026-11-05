@@ -8,6 +8,7 @@ WanderBus is a web app for people in Singapore who have some free time but don't
 |---|---|
 | **Live app** | https://wanderbus.vercel.app/ |
 | **Git repo** | https://github.com/Chromo369369/Supa-team |
+| **Recorded Demo** | https://youtu.be/23BRBJXH0W4 | 
 | **Course** | IS216 Web Application Development II, Group G6 |
 
 > ### ⏳ The first load can be slow, but nothing is broken
@@ -18,7 +19,7 @@ WanderBus is a web app for people in Singapore who have some free time but don't
 > - The first spin, or the first stop page you open, is slow.
 > - The welcome animation after logging in doesn't play.
 >
-> **What to do:** wait 2–3 minutes, then refresh the page. Once the data has downloaded, it's cached and the app responds normally. If it still isn't working after about 5 minutes, please contact the team (see [Team](#team)).
+> **What to do:** wait 2–3 minutes, then refresh the page. Once the data has downloaded, it's cached and the app responds normally. If it still isn't working after about 5 minutes, please contact Jonathan at jonathan.l.2025@computing.smu.edu.sg.
 
 ---
 
@@ -140,22 +141,15 @@ The solo spin is in `app/pages/home.vue`. The group spin uses the same steps thr
 
 ## Running it locally
 
-**You'll need:** Node.js 20 or newer, and pnpm (`npm i -g pnpm`).
+**You'll need:** Node.js 22 (22.22.3 or newer) or 24 (24.15 or newer), and pnpm (`npm i -g pnpm`).
+
+Unzip the submission and open a terminal in the `WanderBus/` folder (the one with `package.json`), then install the dependencies:
 
 ```bash
-git clone https://github.com/Chromo369369/Supa-team.git
-cd Supa-team/WanderBus
 pnpm install
 ```
 
-Create `WanderBus/.env` with these four variables. Ask the team for the values. Never commit this file.
-
-```env
-NUXT_LTA_ACCOUNT_KEY=your-lta-datamall-account-key
-NUXT_ONEMAP_TOKEN=your-onemap-token
-NUXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-NUXT_PUBLIC_SUPABASE_KEY=your-supabase-anon-key
-```
+The submitted zip already includes `WanderBus/.env` with the API keys and Supabase details, so there's nothing to fill in. (It's left out of the git repo on purpose. If you clone the repo instead of using the zip, you'll need these four variables in `WanderBus/.env`: `NUXT_LTA_ACCOUNT_KEY`, `NUXT_ONEMAP_TOKEN`, `NUXT_PUBLIC_SUPABASE_URL` and `NUXT_PUBLIC_SUPABASE_KEY`.)
 
 Then:
 
@@ -175,9 +169,7 @@ pnpm preview      # serve the production build locally
 
 **No database setup is needed.** The app connects to the team's existing Supabase project, where every table, policy, function and storage bucket is already in place. Running it locally with the `.env` values above uses that same database.
 
-The files in `WanderBus/supabase/` are kept for reference. They show how the main tables, row-level security policies, and the triggers that award Pioneer credits, badges and cards work.
-
-In **Authentication → URL Configuration**, set the Site URL to the deployed URL and add `https://<your-app>.vercel.app/**` to the Redirect URLs.
+The SQL files in `WanderBus/supabase/` are kept for reference only. You don't need to run them.
 
 ---
 
@@ -205,7 +197,7 @@ Tests use [Playwright](https://playwright.dev). The config is `WanderBus/playwri
 Run these from the `WanderBus/` folder:
 
 ```bash
-pnpm install                               # includes @playwright/test
+pnpm install                               # skip if you already did this above; includes @playwright/test
 pnpm exec playwright install chromium      # one-time browser download
 pnpm exec playwright test                  # runs everything (starts `pnpm dev` automatically)
 ```
@@ -225,8 +217,8 @@ Before it starts, Playwright launches the dev server (`pnpm dev`), or reuses one
 ### What the tests need
 
 - **No test accounts and no real database.** The browser tests fake Supabase and the `/api` calls (`tests/helpers/mock.ts`, `tests/fixtures/`), so they never log in for real or write data. That keeps them repeatable.
-- **The `api` tests call LTA and OneMap for real,** so they need the keys in `WanderBus/.env` (see [Running it locally](#running-it-locally)).
-- **3 slow tests are skipped by default.** They call the OpenStreetMap-backed routes, which can take over a minute. Run them with `RUN_SLOW_API=1 pnpm exec playwright test --project api`.
+- **The `api` tests call LTA and OneMap for real,** so they use the keys in `WanderBus/.env` (included in the submitted zip).
+- **3 slow tests are skipped by default.** They call the OpenStreetMap-backed routes, which can take over a minute. Run them with `RUN_SLOW_API=1 pnpm exec playwright test --project api` (in Windows PowerShell: `$env:RUN_SLOW_API=1; pnpm exec playwright test --project api`).
 
 ### What's covered
 
@@ -280,7 +272,7 @@ WanderBus/
 │   ├── api/              # LTA, OneMap and Overpass server routes (cached where it helps)
 │   └── plugins/          # warms the places cache on startup
 ├── shared/utils/         # category definitions and distance maths used on both sides
-├── supabase/             # SQL setup files (see Database setup)
+├── supabase/             # SQL files, kept for reference
 └── public/               # static images, favicon, robots.txt
 ```
 
@@ -288,21 +280,23 @@ WanderBus/
 
 ## Team
 
-| Member | Main contributions |
-|---|---|
-| `TODO` | `TODO` |
-| `TODO` | `TODO` |
-| `TODO` | `TODO` |
-| `TODO` | `TODO` |
-| `TODO` | `TODO` |
-| `TODO` | `TODO` |
+| Member |
+|---|
+| Jonathan |
+| Amelia |
+| Xiang Ren |
+| Jinning |
+| Yijun |
+| Yutong |
 
 ---
 
 ## Use of AI tools
 
-> **TODO (team):** the project briefing asks every group to state clearly which parts relied on AI/LLM tools. List each one honestly, e.g. "Claude was used to explain error messages and debugging hints, generate boilerplate for X, and draft this README", and name any parts that came from AI-generated code.
+> We used 21st dev's AI influenced React components as an inspiration for some of our current designs. We also used it to draft this readme and for testing/debugging purposes.
 
 ## Third-party libraries and data
 
 Bootstrap, Bootstrap Icons, Leaflet, Supabase JS and Nuxt/Vue are open-source libraries used under their own licences. Bus data comes from LTA DataMall, address search and map tiles from OneMap (© Singapore Land Authority), and place data from OpenStreetMap contributors via the Overpass API.
+
+**UI inspiration:** the boarding-pass layout on the spin results (`WanderBus/app/components/spin/SpinResults.vue`) is adapted from the "Ticket Confirmation Card" component on [21st.dev](https://21st.dev) (id 6492), rebuilt in Vue for our app.
