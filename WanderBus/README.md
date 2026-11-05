@@ -10,6 +10,16 @@ WanderBus is a web app for people in Singapore who have some free time but don't
 | **Git repo** | https://github.com/Chromo369369/Supa-team |
 | **Course** | IS216 Web Application Development II, Group G6 |
 
+> ### ⏳ The first load can be slow, but nothing is broken
+> WanderBus is hosted on Vercel's free tier, which shuts the server down when nobody is using the app. The first visit after a quiet period starts it up again, and then the app downloads every bus stop and route in Singapore from LTA, plus nearby amenities from OpenStreetMap, before it can spin.
+>
+> **What you may see on that first visit (for up to a few minutes):**
+> - After logging in, the spin page (`/home`) keeps loading, or shows an error.
+> - The first spin, or the first stop page you open, is slow.
+> - The welcome animation after logging in doesn't play.
+>
+> **What to do:** wait 2–3 minutes, then refresh the page. Once the data has downloaded, it's cached and the app responds normally. If it still isn't working after about 5 minutes, please contact the team (see [Team](#team)).
+
 ---
 
 ## Contents
