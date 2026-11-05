@@ -1,7 +1,18 @@
 <script setup>
 import SpinTicket from '~/components/ui/SpinTicket.vue';
 import HeroChase from '~/components/landing/HeroChase.vue';
-</script>
+const {$supabase} = useNuxtApp()
+const {data: {user}} = await $supabase.auth.getUser()
+const validSession = ref(null)
+onMounted(()=>{
+  if (user){
+    validSession.value=true
+  }
+})
+onUnmounted(()=>{
+  validSession.value=null
+})
+</script> 
 
 <template>
     <section class="container hero-section">
@@ -15,7 +26,7 @@ import HeroChase from '~/components/landing/HeroChase.vue';
                 </p>
                 <div class="d-flex flex-wrap gap-3 hero-actions">
                     <NuxtLink to="/register" class="btn btn-wb-primary btn-lg">Start a side quest →</NuxtLink>
-                    <NuxtLink to="/login" class="btn btn-wb-secondary btn-lg">Log in</NuxtLink>
+                    <NuxtLink to="/login" class="btn btn-wb-secondary btn-lg" v-if="!validSession">Log in</NuxtLink>
                 </div>
                 <p class="small-note hero-note mb-0">
                     <i class="bi bi-bus-front" aria-hidden="true"></i>
