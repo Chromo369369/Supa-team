@@ -1,0 +1,6 @@
+
+# Playwright
+playwright/.auth/
+playwright-report/
+test-results/
+blob-report/

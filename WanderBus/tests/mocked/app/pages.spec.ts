@@ -1,4 +1,4 @@
-import { test, expect, SAMPLE_PASSPORT } from '../helpers/mock'
+import { test, expect, SAMPLE_PASSPORT } from '../../helpers/mock'
 
 test.use({ signedIn: true })
 
@@ -22,18 +22,21 @@ test.describe('passport', () => {
 
     test('shows how many trips are saved', async ({ page }) => {
       await page.goto('/passport')
-      await expect(page.locator('.trip-count')).toContainText('3 trips')
+      await expect(page.getByText(/3 trips/).first()).toBeVisible()
     })
 
     test('the empty state is not shown', async ({ page }) => {
       await page.goto('/passport')
-      await expect(page.locator('.trip-count')).toBeVisible()
+      await expect(page.getByText(/3 trips/).first()).toBeVisible()
       await expect(page.getByRole('link', { name: 'Spin a trip' })).toHaveCount(0)
     })
 
-    test('the stamp wall is rendered', async ({ page }) => {
+    test('each trip can be edited or deleted', async ({ page }) => {
       await page.goto('/passport')
-      await expect(page.locator('.passport-wall')).toBeVisible()
+      // Edit and Delete only appear in the details panel, which opens when a stamp is clicked
+      await page.getByRole('button', { name: /^Show trip 1 of 3/ }).click()
+      await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Delete trip' })).toBeVisible()
     })
   })
 })
@@ -48,25 +51,17 @@ test.describe('profile', () => {
 
   test('the cards tab is selected first', async ({ page }) => {
     await page.goto('/profile')
-    await expect(page.getByRole('tab').first()).toHaveAttribute('aria-selected', 'true')
-    await expect(page.locator('#profile-panel-cards')).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Cards' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tabpanel')).toHaveCount(1)
   })
 
-  test('switching tabs shows the matching panel only', async ({ page }) => {
+  test('switching tabs selects only that tab', async ({ page }) => {
     await page.goto('/profile')
-    const tabs = page.getByRole('tab')
-    await tabs.nth(1).click()
-    await expect(page.locator('#profile-panel-shop')).toBeVisible()
-    await expect(page.locator('#profile-panel-cards')).toBeHidden()
-    await tabs.nth(2).click()
-    await expect(page.locator('#profile-panel-posts')).toBeVisible()
-    await expect(page.locator('#profile-panel-shop')).toBeHidden()
-  })
-
-  test('only one tab is selected at a time', async ({ page }) => {
-    await page.goto('/profile')
-    await page.getByRole('tab').nth(2).click()
-    await expect(page.locator('[role=tab][aria-selected=true]')).toHaveCount(1)
+    for (const name of ['Shop', 'My posts', 'Cards']) {
+      await page.getByRole('tab', { name }).click()
+      await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true')
+      await expect(page.getByRole('tab', { selected: true })).toHaveCount(1)
+    }
   })
 
   test('the avatar link in the header opens the profile', async ({ page }) => {
@@ -108,8 +103,7 @@ test.describe('group', () => {
   test('joining with an unknown code does not leave the page', async ({ page }) => {
     await page.goto('/group')
     await page.getByPlaceholder('6-digit code').fill('123456')
-    await page.locator('section, main, body').filter({ has: page.getByPlaceholder('6-digit code') }).first()
-      .getByRole('button').last().click()
+    await page.getByRole('button', { name: 'Join crew' }).click()
     await expect(page).toHaveURL(/\/group$/)
   })
 })
@@ -118,14 +112,14 @@ test.describe('stop page', () => {
   test('renders a stop and its nearby places from the mock API', async ({ page }) => {
     await page.goto('/stop/10003')
     await expect(page).toHaveURL(/\/stop\/10003$/)
-    await expect(page.getByText('Test Cafe').first()).toBeVisible()
-    await expect(page.getByText('Test Museum').first()).toBeVisible()
-    await expect(page.getByText('Test Park').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Test Cafe' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Test Museum' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Test Park' })).toBeVisible()
   })
 
   test('shows the stop name', async ({ page }) => {
     await page.goto('/stop/10003')
-    await expect(page.getByText('Orchard Stn').first()).toBeVisible()
+    await expect(page.getByText(/You.re exploring around/)).toContainText('Orchard Stn')
   })
 
   test('calls the places and arrivals APIs for that stop', async ({ page, mock }) => {

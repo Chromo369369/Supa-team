@@ -1,11 +1,11 @@
-import { test, expect } from '../helpers/mock'
+import { test, expect } from '../../helpers/mock'
 
 test.describe('login form', () => {
   test('shows email, password and a submit button', async ({ page }) => {
     await page.goto('/login')
     await expect(page.getByLabel('Email address')).toBeVisible()
     await expect(page.getByLabel('Password')).toBeVisible()
-    await expect(page.locator('form button[type=submit]')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible()
   })
 
   test('password field hides what you type', async ({ page }) => {
@@ -21,7 +21,7 @@ test.describe('login form', () => {
 
   test('empty submit stays on the page (browser validation)', async ({ page }) => {
     await page.goto('/login')
-    await page.locator('form button[type=submit]').click()
+    await page.getByRole('button', { name: 'Log in' }).click()
     await expect(page).toHaveURL(/\/login$/)
   })
 
@@ -29,8 +29,9 @@ test.describe('login form', () => {
     await page.goto('/login')
     await page.getByLabel('Email address').fill('nobody@example.com')
     await page.getByLabel('Password').fill('wrong-password')
-    await page.locator('form button[type=submit]').click()
-    await expect(page.locator('#login-error')).toBeVisible()
+    await page.getByRole('button', { name: 'Log in' }).click()
+    // Nuxt has its own hidden role=alert for route changes, so pick ours by its text
+    await expect(page.getByRole('alert').filter({ hasText: 'Invalid login credentials' })).toBeVisible()
     await expect(page).toHaveURL(/\/login$/)
   })
 
@@ -50,7 +51,7 @@ test.describe('register form', () => {
 
   test('link back to login works', async ({ page }) => {
     await page.goto('/register')
-    await page.getByRole('link', { name: 'Log in' }).first().click()
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Log in' }).click()
     await expect(page).toHaveURL(/\/login$/)
   })
 
@@ -60,19 +61,19 @@ test.describe('register form', () => {
     await page.getByLabel('Email address').fill('new@example.com')
     await page.getByLabel('Password', { exact: true }).fill('password123')
     await page.getByLabel('Confirm password').fill('different123')
-    await page.locator('form button[type=submit]').click()
+    await page.getByRole('button', { name: 'Create account' }).click()
     await expect(page).toHaveURL(/\/register$/)
     expect(mock.writes).toEqual([])
   })
 
-  test('a valid form shows the success state with a Log in button', async ({ page }) => {
+  test('a valid form shows the check-your-inbox state', async ({ page }) => {
     await page.goto('/register')
     await page.getByLabel('Name', { exact: true }).fill('Tester')
     await page.getByLabel('Email address').fill('new@example.com')
     await page.getByLabel('Password', { exact: true }).fill('password123')
     await page.getByLabel('Confirm password').fill('password123')
-    await page.locator('form button[type=submit]').click()
-    await expect(page.getByRole('link', { name: 'Log in' }).last()).toBeVisible()
+    await page.getByRole('button', { name: 'Create account' }).click()
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible()
   })
 
   test('short password (under 8) is not accepted', async ({ page }) => {
@@ -81,7 +82,7 @@ test.describe('register form', () => {
     await page.getByLabel('Email address').fill('new@example.com')
     await page.getByLabel('Password', { exact: true }).fill('short')
     await page.getByLabel('Confirm password').fill('short')
-    await page.locator('form button[type=submit]').click()
+    await page.getByRole('button', { name: 'Create account' }).click()
     await expect(page).toHaveURL(/\/register$/)
     await expect(page.getByLabel('Name', { exact: true })).toBeVisible()
   })

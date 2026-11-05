@@ -6,7 +6,7 @@ import {
 
 export { expect }
 
-const SUPABASE_URL = process.env.NUXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321'
+const SUPABASE_URL = process.env.NUXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
 const PROJECT_REF = new URL(SUPABASE_URL).hostname.split('.')[0]
 export const STORAGE_KEY = `sb-${PROJECT_REF}-auth-token`
 

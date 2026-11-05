@@ -1,4 +1,4 @@
-import { test, expect } from '../helpers/mock'
+import { test, expect } from '../../helpers/mock'
 
 const protectedRoutes = ['/home', '/passport', '/profile', '/group', '/stop/10003']
 

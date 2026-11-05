@@ -1,0 +1,584 @@
+﻿=== group-Group-GRP-01-hosts-a-crew-chromium
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: group.spec.ts >> Group >> GRP-01 hosts a crew
+- Location: tests\group.spec.ts:46:3
+
+# Error details
+
+```
+Test timeout of 60000ms exceeded while running "afterEach" hook.
+```
+
+# Page snapshot
+
+```yaml
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e3]:
+    - status [ref=f2e4]: WanderBus
+    - generic [ref=f2e5]:
+      - link "Skip to content" [ref=f2e6] [cursor=pointer]:
+        - /url: "#main"
+      - banner [ref=f2e7]:
+        - navigation "Main" [ref=f2e8]:
+          - generic [ref=f2e9]:
+            - link "WanderBus" [ref=f2e10] [cursor=pointer]:
+              - /url: /
+              - img [aria-hidden] [ref=f2e11]:
+                - generic [ref=f2e12]: z
+            - link "Your profile" [ref=f2e22] [cursor=pointer]:
+              - /url: /profile
+            - generic [ref=f2e34]:
+              - link "Home" [ref=f2e35] [cursor=pointer]:
+                - /url: /home
+              - link "Group" [ref=f2e36] [cursor=pointer]:
+                - /url: /group
+              - link "Passport" [ref=f2e37] [cursor=pointer]:
+                - /url: /passport
+              - button "Log out" [ref=f2e38] [cursor=pointer]
+      - main [ref=f2e39]:
+        - generic [ref=f2e40]:
+          - heading "Explore together" [level=1] [ref=f2e41]
+          - paragraph [ref=f2e42]: Gather your friends and let WanderBus choose your next side quest.
+          - generic [ref=f2e43]:
+            - generic [ref=f2e45]:
+              - generic [ref=f2e46]:
+                - heading "Crew lobby" [level=2] [ref=f2e47]
+                - paragraph [ref=f2e48]: Share the code so friends can join. Once everyoneâ€™s here, the host spins for the crew.
+              - generic [ref=f2e50]:
+                - paragraph [ref=f2e215]: Crew 546824
+                - list "Seats on the bus" [ref=f2e230]:
+                  - listitem [ref=f2e231]:
+                    - generic [ref=f2e232]: Seat 1, e2e, host, you
+                    - generic [aria-hidden] [ref=f2e233]:
+                      - generic [aria-hidden] [ref=f2e246]: ï…“
+                      - generic [ref=f2e247]: e2e
+                      - generic [ref=f2e248]: Host, you
+                  - listitem [ref=f2e249]:
+                    - generic [ref=f2e250]: Seat 2, free seat
+                    - generic [ref=f2e252]: Free seat
+                  - listitem [ref=f2e253]:
+                    - generic [ref=f2e254]: Seat 3, free seat
+                    - generic [ref=f2e256]: Free seat
+                  - listitem [ref=f2e257]:
+                    - generic [ref=f2e258]: Seat 4, free seat
+                    - generic [ref=f2e260]: Free seat
+                  - listitem [ref=f2e261]:
+                    - generic [ref=f2e262]: Seat 5, free seat
+                    - generic [ref=f2e264]: Free seat
+                  - listitem [ref=f2e265]:
+                    - generic [ref=f2e266]: Seat 6, free seat
+                    - generic [ref=f2e268]: Free seat
+                - paragraph [ref=f2e269]: 1 of 6 seats taken
+              - generic [ref=f2e270]:
+                - generic [ref=f2e271]: Waiting for friends to joinâ€¦
+                - generic [ref=f2e273]:
+                  - button "Copy code" [ref=f2e274] [cursor=pointer]:
+                    - generic [aria-hidden] [ref=f2e275]: ïŠ
+                    - text: Copy code
+                  - button "Ready" [ref=f2e276] [cursor=pointer]
+                  - button "Leave crew" [ref=f2e277] [cursor=pointer]
+            - generic [ref=f2e291]:
+              - heading "Crew ticket" [level=2] [ref=f2e292]
+              - paragraph [ref=f2e293]: Tap Ready when everyoneâ€™s aboard. Your filters open here, and the ticket you spin is shared with the crew.
+      - contentinfo [ref=f2e294]:
+        - generic [ref=f2e295]:
+          - generic [ref=f2e296]:
+            - generic [ref=f2e297]:
+              - link "WanderBus" [ref=f2e298] [cursor=pointer]:
+                - /url: /
+                - generic [aria-hidden] [ref=f2e299]: ï¡¿
+              - paragraph [ref=f2e301]: Take a random bus. Get off somewhere worth it.
+            - navigation "Footer" [ref=f2e302]:
+              - generic [ref=f2e303]:
+                - generic [ref=f2e304]:
+                  - paragraph [ref=f2e305]: Explore
+                  - list [ref=f2e306]:
+                    - listitem [ref=f2e307]:
+                      - link "About" [ref=f2e308] [cursor=pointer]:
+                        - /url: /
+                    - listitem [ref=f2e309]:
+                      - link "Home" [ref=f2e310] [cursor=pointer]:
+                        - /url: /home
+                - generic [ref=f2e311]:
+                  - paragraph [ref=f2e312]: Account
+                  - list [ref=f2e313]:
+                    - listitem [ref=f2e314]:
+                      - button "Log out" [ref=f2e315] [cursor=pointer]
+          - paragraph [ref=f2e316]: Â© 2026 WanderBus Â· WAD2 G6T3
+      - generic:
+        - status
+        - alert
+  - generic [ref=f2e317]:
+    - button "Toggle Nuxt DevTools" [ref=f2e318] [cursor=pointer]
+    - generic "Page load time" [ref=f2e322]:
+      - generic [ref=f2e323]: "19"
+      - generic [ref=f2e324]: ms
+    - button "Toggle Component Inspector" [ref=f2e326] [cursor=pointer]
+```
+
+# Test source
+
+```ts
+  1  | import { test, expect } from './fixtures'
+  2  | import { resetSoloTrip } from './fixtures/supabase'
+  3  | 
+  4  | // Real Supabase: hosting a crew creates a row, so every test leaves the crew again afterwards.
+  5  | test.describe.configure({ mode: 'serial' })
+  6  | 
+  7  | async function leaveCrewIfInOne(page: import('@playwright/test').Page) {
+  8  |   try {
+  9  |     await leaveCrew(page)
+  10 |   } catch (error) {
+  11 |     const onScreen = await page.evaluate(() => document.body.innerText).catch(() => '(page not readable)')
+  12 |     throw new Error(`Could not leave the test account's crew. Text on the page:\n${onScreen.slice(0, 1200)}\n\n${error}`)
+  13 |   }
+  14 | }
+  15 | 
+  16 | async function leaveCrew(page: import('@playwright/test').Page) {
+  17 |   await page.goto('/group')
+  18 |   const host = page.getByRole('button', { name: 'Host a crew' })
+  19 |   const view = page.getByRole('button', { name: 'View your crew' })
+  20 |   const leave = page.getByRole('button', { name: 'Leave crew' })
+  21 |   // Wait until the page knows whether this account is already in a crew. (count() does not wait, unlike isEnabled().)
+  22 |   await expect
+  23 |     .poll(async () => (await leave.count()) > 0 || (await view.count()) > 0 || ((await host.count()) > 0 && (await host.isEnabled())))
+  24 |     .toBe(true)
+  25 |   if ((await view.count()) > 0) await view.click()
+  26 |   if ((await leave.count()) > 0 || (await leave.isVisible())) {
+  27 |     await expect(leave).toBeVisible()
+  28 |     await leave.click()
+  29 |     // leaving asks for confirmation: "End crew" for the host, "Leave crew" for a member
+  30 |     await page.getByRole('dialog').getByRole('button', { name: /^(End crew|Leave crew)$/ }).click()
+  31 |     await expect(host).toBeEnabled()
+  32 |   }
+  33 | }
+  34 | 
+  35 | // The group page disables "Host a crew" and "Join crew" while the account has an active spin ticket
+  36 | // ("You have an active ticket. End that journey first"). Spin tests can leave one behind, so clear it first.
+  37 | test.beforeEach(async ({ page }) => {
+  38 |   await resetSoloTrip()
+  39 |   await leaveCrewIfInOne(page)
+  40 | })
+> 41 | test.afterEach(async ({ page }) => {
+     |      ^ Test timeout of 60000ms exceeded while running "afterEach" hook.
+  42 |   await leaveCrewIfInOne(page)
+  43 | })
+  44 | 
+  45 | test.describe('Group', () => {
+  46 |   test('GRP-01 hosts a crew', async ({ page }) => {
+  47 |     await page.goto('/group')
+  48 |     await page.getByRole('button', { name: 'Host a crew' }).click()
+  49 | 
+  50 |     // If the lobby does not open, fail with the text that IS on the page (an error toast, for example).
+  51 |     try {
+  52 |       await expect(page.getByRole('heading', { name: 'Crew lobby' })).toBeVisible()
+  53 |     } catch (error) {
+  54 |       const onScreen = await page.evaluate(() => document.body.innerText)
+  55 |       throw new Error(`The crew lobby did not open. Text on the page:\n${onScreen.slice(0, 1200)}\n\n${error}`)
+  56 |     }
+  57 | 
+  58 |     // The code is shown on an LED sign; screen readers get it as text like "Crew 123456".
+  59 |     await expect(page.getByText(/^Crew \d{6}$/).first()).toBeAttached()
+  60 |     await expect(page.getByRole('button', { name: 'Copy code' })).toBeVisible()
+  61 |   })
+  62 | 
+  63 |   test('GRP-02 rejects an invalid crew code', async ({ page }) => {
+  64 |     await page.goto('/group')
+  65 |     await page.getByLabel('Crew code').fill('000000')
+  66 |     await page.getByRole('button', { name: 'Join crew' }).click()
+  67 | 
+  68 |     await expect(page.getByText(/That code doesn.t exist/)).toBeVisible()
+  69 |     await expect(page.getByRole('heading', { name: 'Crew lobby' })).toBeHidden()
+  70 |   })
+  71 | 
+  72 |   test('GRP-03 asks for a full code @p3', async ({ page }) => {
+  73 |     await page.goto('/group')
+  74 |     await page.getByLabel('Crew code').fill('123')
+  75 |     await page.getByRole('button', { name: 'Join crew' }).click()
+  76 |     await expect(page.getByText('Enter the 6-digit crew code.')).toBeVisible()
+  77 |   })
+  78 | })
+  79 | 
+```
+=== passport-Passport-PASS-02-records-a-spin-in-the-passport-chromium
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: passport.spec.ts >> Passport >> PASS-02 records a spin in the passport
+- Location: tests\passport.spec.ts:24:3
+
+# Error details
+
+```
+Test timeout of 60000ms exceeded.
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - status [ref=e4]: WanderBus
+    - generic [ref=e5]:
+      - link "Skip to content" [ref=e6] [cursor=pointer]:
+        - /url: "#main"
+      - banner [ref=e7]:
+        - navigation "Main" [ref=e8]:
+          - generic [ref=e9]:
+            - link "WanderBus" [ref=e10] [cursor=pointer]:
+              - /url: /
+              - img [aria-hidden] [ref=e11]:
+                - generic [ref=e12]: z
+            - link "Your profile" [ref=e22] [cursor=pointer]:
+              - /url: /profile
+            - generic [ref=e34]:
+              - link "Home" [ref=e35] [cursor=pointer]:
+                - /url: /home
+              - link "Group" [ref=e36] [cursor=pointer]:
+                - /url: /group
+              - link "Passport" [ref=e37] [cursor=pointer]:
+                - /url: /passport
+              - button "Log out" [ref=e38] [cursor=pointer]
+      - main [ref=e39]:
+        - generic [ref=e40]:
+          - heading "Spin a side quest" [level=1] [ref=e41]
+          - paragraph [ref=e42]:
+            - generic [aria-hidden] [ref=e43]: ï§
+            - text: Starting near 640 ROWELL ROAD SINGAPORE 200640
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - generic "Your filters" [ref=e46]:
+                - generic [ref=e48]:
+                  - heading "Your filters" [level=2] [ref=e49]
+                  - group [ref=e50]:
+                    - generic [ref=e51]:
+                      - generic [ref=e52]: Starting location
+                      - combobox "Starting location" [active] [ref=e53]: 640 ROWELL ROAD SINGAPORE 200640
+                      - paragraph [ref=e54]
+                    - generic [ref=e55]:
+                      - generic [ref=e56]: How long do you have?
+                      - generic [ref=e57]:
+                        - slider "How long do you have?" [ref=e58]: "60"
+                        - generic [aria-hidden]:
+                          - generic: "60"
+                          - generic: min
+                          - generic: Long trip
+                      - list [aria-hidden] [ref=e77]:
+                        - listitem [ref=e78]:
+                          - text: Short
+                          - generic [ref=e80]: â‰¤ 20
+                        - listitem [ref=e81]:
+                          - text: Medium
+                          - generic [ref=e83]: 21â€“40
+                        - listitem [ref=e84]:
+                          - text: Long
+                          - generic [ref=e86]: "> 40"
+                      - paragraph [ref=e87]: Drag the dial or use the arrow keys. Walking to the stop, waiting and the ride all count.
+                    - group "What are you in the mood for?" [ref=e88]:
+                      - generic [ref=e90]:
+                        - checkbox "CafÃ©s"
+                        - generic [ref=e91] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e92]: ïŸ«
+                          - text: ï˜³ CafÃ©s
+                        - checkbox "Food"
+                        - generic [ref=e93] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e94]: ïŒ’
+                          - text: ï˜³ Food
+                        - checkbox "Parks"
+                        - generic [ref=e95] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e96]: ï—¢
+                          - text: ï˜³ Parks
+                        - checkbox "Museums" [checked]
+                        - generic [ref=e97] [cursor=pointer]:
+                          - text: ï˜®
+                          - generic [aria-hidden] [ref=e98]: ï˜³
+                          - text: Museums
+                        - checkbox "Sights"
+                        - generic [ref=e99] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e100]: ïˆ 
+                          - text: ï˜³ Sights
+                        - checkbox "Malls"
+                        - generic [ref=e101] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e102]: ï…¹
+                          - text: ï˜³ Malls
+                      - paragraph [ref=e103]: Pick none and any stop can come up.
+                  - generic [ref=e104]:
+                    - button "Spin" [disabled]
+                    - paragraph [ref=e105]: You are already in a group, please spin there or exit your group first
+              - text: ï•«
+            - generic [ref=e106]:
+              - paragraph [ref=e433]: "?? READY WHEN YOU ARE"
+              - status [ref=e434]
+              - generic [ref=e436]:
+                - generic [ref=e437]:
+                  - paragraph [ref=e963]: READY WHEN YOU ARE
+                  - img [aria-hidden] [ref=e993]:
+                    - generic [ref=e994]: z
+                - paragraph [ref=e1003]: Set your time and tap Spin. Up to three mystery tickets ride the belt; pick one, then tear its stub to find out where youâ€™re going.
+      - contentinfo [ref=e1004]:
+        - generic [ref=e1005]:
+          - generic [ref=e1006]:
+            - generic [ref=e1007]:
+              - link "WanderBus" [ref=e1008] [cursor=pointer]:
+                - /url: /
+                - generic [aria-hidden] [ref=e1009]: ï¡¿
+              - paragraph [ref=e1011]: Take a random bus. Get off somewhere worth it.
+            - navigation "Footer" [ref=e1012]:
+              - generic [ref=e1013]:
+                - generic [ref=e1014]:
+                  - paragraph [ref=e1015]: Explore
+                  - list [ref=e1016]:
+                    - listitem [ref=e1017]:
+                      - link "About" [ref=e1018] [cursor=pointer]:
+                        - /url: /
+                    - listitem [ref=e1019]:
+                      - link "Home" [ref=e1020] [cursor=pointer]:
+                        - /url: /home
+                - generic [ref=e1021]:
+                  - paragraph [ref=e1022]: Account
+                  - list [ref=e1023]:
+                    - listitem [ref=e1024]:
+                      - button "Log out" [ref=e1025] [cursor=pointer]
+          - paragraph [ref=e1026]: Â© 2026 WanderBus Â· WAD2 G6T3
+      - generic:
+        - status
+        - alert
+  - generic [ref=e1027]:
+    - button "Toggle Nuxt DevTools" [ref=e1028] [cursor=pointer]
+    - generic "Page load time" [ref=e1032]:
+      - generic [ref=e1033]: "99"
+      - generic [ref=e1034]: ms
+    - button "Toggle Component Inspector" [ref=e1036] [cursor=pointer]
+```
+=== spin-Spin-results-SPIN-02-spins-and-shows-a-side-quest-chromium
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: spin.spec.ts >> Spin: results >> SPIN-02 spins and shows a side quest
+- Location: tests\spin.spec.ts:35:3
+
+# Error details
+
+```
+Test timeout of 60000ms exceeded.
+```
+
+```
+Error: locator.click: Test timeout of 60000ms exceeded.
+Call log:
+  - waiting for getByRole('button', { name: 'Spin', exact: true })
+    - locator resolved to <button disabled type="button" data-v-71a90528="" data-bs-dismiss="offcanvas" aria-describedby="spin-hint" data-bs-target="#filters-sheet" class="btn btn-wb-primary btn-lg w-100">Spin</button>
+  - attempting click action
+    2 Ã— waiting for element to be visible, enabled and stable
+      - element is not enabled
+    - retrying click action
+    - waiting 20ms
+    2 Ã— waiting for element to be visible, enabled and stable
+      - element is not enabled
+    - retrying click action
+      - waiting 100ms
+    114 Ã— waiting for element to be visible, enabled and stable
+        - element is not enabled
+      - retrying click action
+        - waiting 500ms
+    - waiting for element to be visible, enabled and stable
+
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - status [ref=e4]: WanderBus
+    - generic [ref=e5]:
+      - link "Skip to content" [ref=e6] [cursor=pointer]:
+        - /url: "#main"
+      - banner [ref=e7]:
+        - navigation "Main" [ref=e8]:
+          - generic [ref=e9]:
+            - link "WanderBus" [ref=e10] [cursor=pointer]:
+              - /url: /
+              - img [aria-hidden] [ref=e11]:
+                - generic [ref=e12]: z
+            - link "Your profile" [ref=e22] [cursor=pointer]:
+              - /url: /profile
+            - generic [ref=e34]:
+              - link "Home" [ref=e35] [cursor=pointer]:
+                - /url: /home
+              - link "Group" [ref=e36] [cursor=pointer]:
+                - /url: /group
+              - link "Passport" [ref=e37] [cursor=pointer]:
+                - /url: /passport
+              - button "Log out" [ref=e38] [cursor=pointer]
+      - main [ref=e39]:
+        - generic [ref=e40]:
+          - heading "Spin a side quest" [level=1] [ref=e41]
+          - paragraph [ref=e42]:
+            - generic [aria-hidden] [ref=e43]: ï§
+            - text: Starting near 640 ROWELL ROAD SINGAPORE 200640
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - generic "Your filters" [ref=e46]:
+                - generic [ref=e48]:
+                  - heading "Your filters" [level=2] [ref=e49]
+                  - group [ref=e50]:
+                    - generic [ref=e51]:
+                      - generic [ref=e52]: Starting location
+                      - combobox "Starting location" [active] [ref=e53]: 640 ROWELL ROAD SINGAPORE 200640
+                      - paragraph [ref=e54]
+                    - generic [ref=e55]:
+                      - generic [ref=e56]: How long do you have?
+                      - generic [ref=e57]:
+                        - slider "How long do you have?" [ref=e58]: "60"
+                        - generic [aria-hidden]:
+                          - generic: "60"
+                          - generic: min
+                          - generic: Long trip
+                      - list [aria-hidden] [ref=e77]:
+                        - listitem [ref=e78]:
+                          - text: Short
+                          - generic [ref=e80]: â‰¤ 20
+                        - listitem [ref=e81]:
+                          - text: Medium
+                          - generic [ref=e83]: 21â€“40
+                        - listitem [ref=e84]:
+                          - text: Long
+                          - generic [ref=e86]: "> 40"
+                      - paragraph [ref=e87]: Drag the dial or use the arrow keys. Walking to the stop, waiting and the ride all count.
+                    - group "What are you in the mood for?" [ref=e88]:
+                      - generic [ref=e90]:
+                        - checkbox "CafÃ©s"
+                        - generic [ref=e91] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e92]: ïŸ«
+                          - text: ï˜³ CafÃ©s
+                        - checkbox "Food"
+                        - generic [ref=e93] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e94]: ïŒ’
+                          - text: ï˜³ Food
+                        - checkbox "Parks"
+                        - generic [ref=e95] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e96]: ï—¢
+                          - text: ï˜³ Parks
+                        - checkbox "Museums" [checked]
+                        - generic [ref=e97] [cursor=pointer]:
+                          - text: ï˜®
+                          - generic [aria-hidden] [ref=e98]: ï˜³
+                          - text: Museums
+                        - checkbox "Sights"
+                        - generic [ref=e99] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e100]: ïˆ 
+                          - text: ï˜³ Sights
+                        - checkbox "Malls"
+                        - generic [ref=e101] [cursor=pointer]:
+                          - generic [aria-hidden] [ref=e102]: ï…¹
+                          - text: ï˜³ Malls
+                      - paragraph [ref=e103]: Pick none and any stop can come up.
+                  - generic [ref=e104]:
+                    - button "Spin" [disabled]
+                    - paragraph [ref=e105]: You are already in a group, please spin there or exit your group first
+              - text: ï•«
+            - generic [ref=e106]:
+              - paragraph [ref=e433]: "?? READY WHEN YOU ARE"
+              - status [ref=e434]
+              - generic [ref=e436]:
+                - generic [ref=e437]:
+                  - paragraph [ref=e963]: READY WHEN YOU ARE
+                  - img [aria-hidden] [ref=e993]:
+                    - generic [ref=e994]: z
+                - paragraph [ref=e1003]: Set your time and tap Spin. Up to three mystery tickets ride the belt; pick one, then tear its stub to find out where youâ€™re going.
+      - contentinfo [ref=e1004]:
+        - generic [ref=e1005]:
+          - generic [ref=e1006]:
+            - generic [ref=e1007]:
+              - link "WanderBus" [ref=e1008] [cursor=pointer]:
+                - /url: /
+                - generic [aria-hidden] [ref=e1009]: ï¡¿
+              - paragraph [ref=e1011]: Take a random bus. Get off somewhere worth it.
+            - navigation "Footer" [ref=e1012]:
+              - generic [ref=e1013]:
+                - generic [ref=e1014]:
+                  - paragraph [ref=e1015]: Explore
+                  - list [ref=e1016]:
+                    - listitem [ref=e1017]:
+                      - link "About" [ref=e1018] [cursor=pointer]:
+                        - /url: /
+                    - listitem [ref=e1019]:
+                      - link "Home" [ref=e1020] [cursor=pointer]:
+                        - /url: /home
+                - generic [ref=e1021]:
+                  - paragraph [ref=e1022]: Account
+                  - list [ref=e1023]:
+                    - listitem [ref=e1024]:
+                      - button "Log out" [ref=e1025] [cursor=pointer]
+          - paragraph [ref=e1026]: Â© 2026 WanderBus Â· WAD2 G6T3
+      - generic:
+        - status
+        - alert
+  - generic [ref=e1027]:
+    - button "Toggle Nuxt DevTools" [ref=e1028] [cursor=pointer]
+    - generic "Page load time" [ref=e1032]:
+      - generic [ref=e1033]: "94"
+      - generic [ref=e1034]: ms
+    - button "Toggle Component Inspector" [ref=e1036] [cursor=pointer]
+```
+
+# Test source
+
+```ts
+  1  | import { expect, type Page } from '@playwright/test'
+  2  | import { FIXTURE } from '../fixtures/bus'
+  3  | 
+  4  | /** Starting location: type, then pick the first suggestion. */
+  5  | export async function pickStart(page: Page, query = FIXTURE.startQuery) {
+  6  |   await page.getByRole('combobox', { name: 'Starting location' }).fill(query)
+  7  |   await page.getByRole('option', { name: /ROWELL ROAD|TUAS LINK/ }).click()
+  8  | }
+  9  | 
+  10 | /** Open /home with the time and activity filters preset through the URL, pick a start and press Spin. */
+  11 | export async function spin(page: Page, opts: { mins?: number, cats?: string[], query?: string } = {}) {
+  12 |   const { mins = 60, cats = ['museum'], query = FIXTURE.startQuery } = opts
+  13 |   const catQuery = cats.length ? `&cats=${cats.join(',')}` : ''
+  14 |   await page.goto(`/home?mins=${mins}${catQuery}`)
+  15 |   await pickStart(page, query)
+> 16 |   await page.getByRole('button', { name: 'Spin', exact: true }).click()
+     |                                                                 ^ Error: locator.click: Test timeout of 60000ms exceeded.
+  17 | }
+  18 | 
+  19 | /** After a spin that gives one ticket: take it and tear the stub with the keyboard. */
+  20 | export async function takeTicketAndTear(page: Page) {
+  21 |   // The belt never stops moving, so a mouse click would wait forever for the ticket to hold still.
+  22 |   // The belt's own hint says "press Enter to take this ticket", so use the keyboard.
+  23 |   const ticket = page.getByRole('button', { name: /^Ticket A, about/ }).first()
+  24 |   await ticket.focus()
+  25 |   await ticket.press('Enter')
+  26 |   // the stub's accessible name is "Tear the stub to reveal your bus" (the component's default is "Tear off the stub")
+  27 |   const stub = page.getByRole('button', { name: /tear (off )?the stub/i })
+  28 |   await stub.focus()
+  29 |   await stub.press('Enter')
+  30 |   await expect(page.getByRole('heading', { name: 'Your side quest' })).toBeVisible()
+  31 | }
+  32 | 
+  33 | /** Confirm dialog (WbConfirm): click its confirm button. */
+  34 | export async function confirmDialog(page: Page, label: string) {
+  35 |   await page.getByRole('dialog').getByRole('button', { name: label }).click()
+  36 | }
+  37 | 
+```

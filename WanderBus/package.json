@@ -7,7 +7,13 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test:e2e": "playwright test --project=setup --project=chromium --project=firefox --project=webkit --project=mobile",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "test:unit": "playwright test --project=unit",
+    "test:mocked": "playwright test --project=mocked",
+    "test:api": "playwright test --project=api"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
