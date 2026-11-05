@@ -110,8 +110,10 @@ export const useStopActivities = () => {
 
   async function deleteActivity(activity: any) {
     const table = activity.kind == 'signpost' ? 'signposts' : 'challenges'
-    const { error } = await $supabase.from(table).delete().eq('id', activity.id)
+    const { data, error } = await $supabase.from(table).delete().eq('id', activity.id).select('id')
     if (error) throw new Error(error.message)
+    if (!data?.length) throw new Error('You don’t have permission to delete this')
+
     if (activity.photo_path) await $supabase.storage.from(BUCKET).remove([activity.photo_path])
     activities.value = activities.value.filter(item => item.key != activity.key)
   }

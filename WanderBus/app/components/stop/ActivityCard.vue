@@ -5,7 +5,8 @@ import PhotoViewer from '~/components/ui/PhotoViewer.vue'
 const props = defineProps({
     activity: Object,
     selected: Boolean,
-    busy: Boolean      // saving a vote / completion right now
+    busy: Boolean,      // saving a vote / completion right now
+    isAdmin:Boolean
 })
 
 const emit = defineEmits(['select', 'edit', 'delete', 'helpful', 'complete'])
@@ -155,8 +156,8 @@ function onProofPicked(event) {
                 <button type="button" class="btn-wb-ghost btn-sm" :aria-label="`Edit your ${noun}`" @click="emit('edit', activity)">
                     <i class="bi bi-pencil" aria-hidden="true"></i> Edit
                 </button>
-                <button type="button" class="btn-wb-ghost btn-sm danger" :aria-label="`Delete your ${noun}`" @click="emit('delete', activity)">
-                    <i class="bi bi-trash3" aria-hidden="true"></i> Delete
+                <button v-if="activity.isMine || isAdmin" type="button" class="btn-wb-ghost btn-sm danger"
+                :aria-label="`Delete ${activity.isMine ? 'your' : 'this'} ${noun}`" @click="emit('delete', activity)"> Delete
                 </button>
             </span>
         </footer>

@@ -2,7 +2,7 @@
 
 Nuxt 4 + Vue 3 + Supabase. Spin for a random bus stop, explore it, and log the trip in your passport.
 
-## Setup
+---
 
 ```bash
 pnpm install

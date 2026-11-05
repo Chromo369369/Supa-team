@@ -1,19 +1,18 @@
 <script setup>
 import PhotoViewer from '~/components/ui/PhotoViewer.vue'
-
 const props = defineProps({
     place: Object,
     stop: Object,
     selected: Boolean,
     photos: { type: Array, default: () => [] },   // newest first
-    uploading: Boolean
+    uploading: Boolean,
+    isAdmin: Boolean
 })
 
-const emit = defineEmits(['select', 'upload'])
+const emit = defineEmits(['select', 'upload', 'delete-photo'])
 
 const style = computed(() => placeStyle(props.place.category))
 const fileInput = ref(null)
-
 function onFilePicked(event) {
     if (event.target.files[0]) emit('upload', props.place, event.target.files[0])
     event.target.value = ''   // so picking the same file again still triggers change
@@ -87,6 +86,9 @@ const walkLink = computed(() =>
                 <a :href="walkLink" target="_blank" rel="noopener noreferrer" class="btn-wb-ghost btn-sm">
                     Walk there <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="visually-hidden"> (opens Google Maps in a new tab)</span>
                 </a>
+                <button type="button" class="btn-wb btn-wb-danger btn-sm" @click="emit(`delete-photo`,place,cover)" :hidden="!isAdmin || !photos.length">
+                  Delete Photo
+                </button>
             </div>
             <input ref="fileInput" type="file" accept="image/*" class="d-none" tabindex="-1" aria-hidden="true" @change="onFilePicked" />
         </div>
