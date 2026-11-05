@@ -13,14 +13,17 @@ const groupCode = ref('')
 const joiningGroup = ref(false)
 const joinError = ref('')
 const alreadyInGroup = ref(false)
+const hasSoloTicket = ref(false)
 const checkingMembership = ref(true)
 
 onMounted(async () => {
   try {
     const { data, error } = await $supabase.auth.getUser()
     if (error) throw error
-
+    
     if (!data.user) return
+    const { data: soloTrip} = await $supabase.from('soloTrip').select('user_id').eq('user_id',data.user.id).maybeSingle()
+    hasSoloTicket.value = !!soloTrip
 
     const { data: membership, error: membershipError } = await $supabase
       .from('group_members')
@@ -82,7 +85,8 @@ async function createGroup() {
     creatingGroup.value ||
     joiningGroup.value ||
     checkingMembership.value ||
-    alreadyInGroup.value
+    alreadyInGroup.value ||
+    hasSoloTicket.value
   ) {
     return
   }
@@ -182,7 +186,8 @@ async function joinGroup() {
   if (
     joiningGroup.value ||
     creatingGroup.value ||
-    checkingMembership.value
+    checkingMembership.value ||
+    hasSoloTicket.value
   ) return
 
   joinError.value = ''
@@ -277,12 +282,15 @@ function resetEverything() {
           <p v-if="alreadyInGroup" id="host-hint" class="card-hint">
             You’re already in a crew. Leave it to host a new one.
           </p>
+          <p v-else-if="hasSoloTicket" id="host-hint" class="card-hint">
+          You have an active ticket. End that journey first to host a crew.
+          </p>
           <button
             type="button"
             class="btn-wb-secondary group-button"
-            :disabled="creatingGroup || joiningGroup || checkingMembership || alreadyInGroup"
+            :disabled="creatingGroup || joiningGroup || checkingMembership || alreadyInGroup || hasSoloTicket"
             :aria-busy="creatingGroup ? 'true' : undefined"
-            :aria-describedby="alreadyInGroup ? 'host-hint' : undefined"
+            :aria-describedby="( alreadyInGroup || hasSoloTicket )? 'host-hint' : undefined"
             @click="createGroup"
           >
             {{ creatingGroup ? 'Hosting…' : 'Host a crew' }}
@@ -307,9 +315,9 @@ function resetEverything() {
             maxlength="6"
             autocomplete="off"
             spellcheck="false"
-            :disabled="joiningGroup || creatingGroup || checkingMembership || alreadyInGroup"
+            :disabled="joiningGroup || creatingGroup || checkingMembership || alreadyInGroup || hasSoloTicket"
             :aria-invalid="joinError != '' ? 'true' : undefined"
-            :aria-describedby="joinError ? 'join-error' : (alreadyInGroup ? 'join-hint' : 'join-format')"
+            :aria-describedby="joinError ? 'join-error' : (( alreadyInGroup || hasSoloTicket ) ? 'join-hint' : 'join-format')"
             class="form-control group-input num"
             placeholder="6-digit code"
           >
@@ -319,6 +327,9 @@ function resetEverything() {
           <p v-else-if="alreadyInGroup" id="join-hint" class="card-hint">
             You’re already in a crew.
           </p>
+          <p v-else-if="hasSoloTicket" id="join-hint" class="card-hint">
+          You have an active ticket. End that journey first to join a crew.
+          </p>
           <p v-else id="join-format" class="card-hint">
             Six digits, like <span class="num">482193</span>.
           </p>
@@ -326,7 +337,7 @@ function resetEverything() {
           <button
             type="submit"
             class="btn-wb-primary group-button"
-            :disabled="joiningGroup || creatingGroup || checkingMembership"
+            :disabled="joiningGroup || creatingGroup || checkingMembership || hasSoloTicket"
             :aria-busy="joiningGroup ? 'true' : undefined"
           >
             {{ alreadyInGroup ? 'View your crew' : (joiningGroup ? 'Joining…' : 'Join crew') }}

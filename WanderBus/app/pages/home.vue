@@ -6,9 +6,39 @@ import { filterByAmens } from '~/composables/filterAmens';
 
 const { $supabase } = useNuxtApp()
 const toast = useToast()
-
+const inGroup = ref(false)
 definePageMeta({ middleware: 'auth' })
 
+
+onMounted(async() =>{
+    const {data: {user}} = await $supabase.auth.getUser()
+    
+    if (!user) return
+    const {data: member} = await $supabase.from('group_members').select('user_id').eq('user_id', user.id).maybeSingle()
+    const uid = member?.user_id
+    inGroup.value = !!uid
+    const {data} = await $supabase.from('soloTrip').select('current_trip').eq('user_id',user.id).maybeSingle()
+    const saved = data?.current_trip
+    if (!saved){
+        return
+    }
+    submitted.value = saved.submitted
+    ticketOptions.value = saved.ticketOptions
+    chosenStop.value = saved.chosenStop
+    stopDetails.value = saved.stopDetails
+    startDetails.value = saved.startDetails
+    startingStops.value = saved.startingStops
+    preferences.value = saved.preferences
+    selectedPlace.value = saved.startPlace
+    selectedPlaceTemp.value = saved.startPlace
+
+    soloSpin.value = buildSoloSpin()
+
+})
+
+
+
+const soloSpin = ref(null)
 const amenStops = await useFetch('/api/allAmenities')
 const preferences = ref([])
 const travelTimeTemp = ref(60)
@@ -32,6 +62,33 @@ const possibleStops = ref({})
 // Up to 3 different stops for bays A/B/C; picking a bay sets chosenStop.
 const ticketOptions = ref([])
 
+async function soloSave(){
+    const {data: {user}} = await $supabase.auth.getUser()
+    if (!user){return}
+    const { error } = await $supabase.from('soloTrip').upsert({
+        user_id:user.id,
+        current_trip: soloSpin.value
+    })
+    if (error){
+        alert(`Could not save your spin, ${error}`)
+    }
+}    
+
+function buildSoloSpin(){
+    return {
+        
+                submitted: submitted,
+                errorMessage:errorMessage,
+                chosenStop:chosenStop,
+                ticketOptions:ticketOptions,
+                stopDetails:stopDetails,
+                startDetails:startDetails,
+                startPlace:selectedPlace,
+                startingStops:startingStops,
+                preferences:preferences,
+            
+    }
+}
 
 async function reroll() {
     chosenStop.value = chooseStop(possibleStops.value)
@@ -51,10 +108,11 @@ function pickTickets(stops) {
     return picks
 }
 
-function chooseTicket(option) {
+async function chooseTicket(option) {
     chosenStop.value = option
     stopDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.destination)
     startDetails.value = response.data.value.find(stop => stop.BusStopCode === chosenStop.value.chosen.boardAt)
+    await soloSave()
 }
 
 async function update(){
@@ -95,6 +153,10 @@ async function update(){
         possibleStops.value = filterBusStops(arrivals, travelTime.value, allRoutes.data.value, starts)
         possibleStops.value = filterByAmens(preferences.value, possibleStops.value, amenStops.data.value)
         ticketOptions.value = pickTickets(possibleStops.value)
+        
+        soloSpin.value = buildSoloSpin()
+
+        await soloSave()
 
 
     } catch (e) {
@@ -134,13 +196,18 @@ async function saveTrip(){
     }
 
 // added for End adventure (boss approved): back to a fresh spin once the adventure ends
-function resetSpin() {
+async function resetSpin() {
     submitted.value = false
     chosenStop.value = ''
     ticketOptions.value = []
     errorMessage.value = ''
     stopDetails.value = ''
     startDetails.value = ''
+    soloSpin.value = null
+    const {data: {user}} = await $supabase.auth.getUser()
+    if (user){
+         const {data} = await $supabase.from('soloTrip').delete().eq('user_id',user.id)
+    }   
 }
 </script>
 
@@ -164,10 +231,12 @@ function resetSpin() {
                 v-model:preferences="preferences"
                 :busy="submitted && !chosenStop && !ticketOptions.length && !errorMessage"
                 :has-spun="submitted"
+                :group="inGroup"
                 @submit="update()"
             />
 
             <SpinResults
+                v-if="!soloSpin"
                 :submitted="submitted"
                 :error-message="errorMessage"
                 :chosen-stop="chosenStop"
@@ -181,6 +250,29 @@ function resetSpin() {
                 :amenities="amenStops.data.value ?? {}"
                 :saving="savingTrip"
                 :saved="savedTrip"
+                :is-member="false"
+                @reroll="reroll()"
+                @choose="chooseTicket($event)"
+                @retry="update()"
+                @save-trip="saveTrip()"
+                @end-adventure="resetSpin()"
+            />
+            <SpinResults
+                v-else-if="soloSpin"
+                :submitted="soloSpin.submitted"
+                :error-message="soloSpin.errorMessage"
+                :chosen-stop="soloSpin.chosenStop"
+                :ticket-options="soloSpin.ticketOptions"
+                :bus-stops="response.data.value ?? []"
+                :stop-details="soloSpin.stopDetails"
+                :start-details="soloSpin.startDetails"
+                :start-place="soloSpin.startPlace"
+                :starting-stops="soloSpin.startingStops"
+                :preferences="soloSpin.preferences"
+                :amenities="amenStops.data.value ?? {}"
+                :saving="savingTrip"
+                :saved="savedTrip"
+                :is-member="false"
                 @reroll="reroll()"
                 @choose="chooseTicket($event)"
                 @retry="update()"

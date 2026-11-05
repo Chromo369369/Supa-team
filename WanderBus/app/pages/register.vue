@@ -11,6 +11,7 @@
     const mismatchError = ref('')
     const registerError = ref('')
     const confirmInput = ref(null)
+    definePageMeta({ middleware: 'guest' })
 
     async function handleRegister() {
         mismatchError.value = ''

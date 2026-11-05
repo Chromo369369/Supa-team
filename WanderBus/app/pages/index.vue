@@ -8,6 +8,7 @@ import LandingCursor, { BUS_CURSOR_KEY, createBusCursorState } from '~/component
 
 // One shared state for the page-wide cursor bus (LandingCursor) and the hero's lane bus (HeroChase).
 provide(BUS_CURSOR_KEY, createBusCursorState());
+
 </script>
 
 <template>
