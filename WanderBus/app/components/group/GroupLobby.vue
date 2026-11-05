@@ -64,7 +64,6 @@ async function saveTrip(){
             const {data, error} = await $supabase.from('passport_entries').insert({
                 starting_stop: sharedSpin.value.startDetails.Description,
                 end_stop: sharedSpin.value.stopDetails.Description,
-                end_stop_code: sharedSpin.value.stopDetails.BusStopCode,
                 time_taken: Math.ceil(sharedSpin.value.chosenStop.chosen.totalTime),
                 bus_taken: sharedSpin.value.chosenStop.chosen.bus,
                 starting_location: sharedSpin.value.startingAddress
