@@ -1,40 +1,50 @@
 <!--
-  HeroChase: the decorative chase behind the landing hero (design.md §4.1, plan "hero chase").
-  A mini bus eases toward the pointer inside the hero, the mascot follows it with a lag and looks
-  at it, and the mascot leaves footprints that fade over 1.2 s. Original WanderBus drawing.
+  HeroChase: the idle lane bus in the landing hero (design.md §4.1, plan Tier 1.5 "cursor bus",
+  round 2). The mini bus runs back and forth in the hero's lane with the mascot lagging behind it,
+  looking at it and leaving footprints that fade over 1.2 s. Original WanderBus drawing.
 
-  Place it as the last child of a `position: relative` hero; it fills it with `inset: 0`.
+  Place it as the last child of a `position: relative` hero; it fills it with `inset: 0`. The lane
+  is the hero element marked `data-chase-lane` (LandingHero: the free space beside "How it works",
+  below the CTAs). Bus, mascot and footprints all stay in that lane; without one nothing is drawn.
 
-  - The drawing layer is aria-hidden and pointer-events: none. The real cursor stays as it is.
-  - On coarse pointers, before the first pointer move, after 20 s without one, or while the
-    pointer is outside the hero, the bus loops a fixed figure-eight route instead.
-  - Reduced motion: everything sits still in one spot, no loop runs and the pause toggle is hidden.
-  - One requestAnimationFrame loop, stopped while paused, scrolled out of view or the tab is hidden.
-  - Footprints come from a pool of 12 dots, recycled oldest first.
+  The cursor bus lives in LandingCursor (page wide). Both read the shared state from
+  `BUS_CURSOR_KEY` (provided by pages/index.vue):
+  - `active` true: the cursor bus is on screen, so this layer hides and its loop stops. When it
+    turns false again, the lane bus jumps straight back into the lane (no drive across the text).
+    Only one bus is ever visible.
+  - `enabled` false (the corner pill is off): the lane bus stays parked, stopped.
+  - `lane.locate()` reports where the lane mascot stands, so the cursor mascot can start from
+    there when the cursor bus takes over.
+  Reduced motion: the bus sits still at the right end of the lane.
+
+  One requestAnimationFrame loop, stopped while hidden, parked, scrolled out of view or the tab is
+  hidden. The layer is aria-hidden and pointer-events: none. Footprints come from a pool of 12 dots.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WanderMascot from '~/components/ui/WanderMascot.vue'
-import { useMotionPrefs, usePointer } from '~/composables/usePointer'
+import { BUS_CURSOR_KEY } from '~/components/landing/LandingCursor.vue'
+import { useMotionPrefs } from '~/composables/usePointer'
 
 const POOL = 12
 const FADE_MS = 1200
 const STEP_PX = 22 // distance the mascot walks between footprints
-const PAD = 28 // keep the bus this far inside the hero edges
 const BUS_W = 56
 const BUS_H = 30
 const MASCOT = 30
 const LAG_PX = 46 // how far behind the bus the mascot aims to be
+const LANE_SPEED = 140 // px/s-ish across the lane
 
-const { reducedMotion, canTrack } = useMotionPrefs()
-const pointer = usePointer({ active: canTrack })
+const { reducedMotion } = useMotionPrefs()
+const shared = inject(BUS_CURSOR_KEY, null)
+const parked = computed(() => shared ? !shared.enabled.value : false)
+const hidden = computed(() => shared ? shared.active.value : false)
 
 const root = ref<HTMLElement | null>(null)
 const busEl = ref<HTMLElement | null>(null)
 const mascotEl = ref<HTMLElement | null>(null)
 const prints = ref<HTMLElement[]>([])
 
-const paused = ref(false)
 const inView = ref(true)
 const tabVisible = ref(true)
 const mounted = ref(false)
@@ -44,33 +54,65 @@ const placed = ref(false)
 const lookAt = ref<{ x: number; y: number } | null>(null)
 
 const running = computed(
-  () => mounted.value && !paused.value && inView.value && tabVisible.value && !reducedMotion.value,
+  () => mounted.value && !parked.value && !hidden.value && inView.value && tabVisible.value && !reducedMotion.value,
 )
 
-/* ── simulation state (plain numbers, not reactive) ── */
+/* ── simulation state (plain numbers, hero-local px) ── */
 const bus = { x: 0, y: 0, face: 1, tilt: 0 }
 const pal = { x: 0, y: 0 }
 let lastPrint = { x: 0, y: 0 }
 let printIndex = 0
 let printSide = 1
-let routeT = 0
+// Route phase: sin(routeT) = -1 is the left end of the lane.
+let routeT = (3 * Math.PI) / 2
+let laneEl: HTMLElement | null = null
 let raf = 0
 let lastTime = 0
-let started = false
+let hero: HTMLElement | null = null
+
+interface Area {
+  /** bus centre range */
+  x0: number
+  x1: number
+  y0: number
+  y1: number
+  /** mascot centre range */
+  mx0: number
+  mx1: number
+}
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 function bounds() {
   return root.value?.getBoundingClientRect() ?? null
 }
 
-function routePoint(w: number, h: number, t: number) {
-  // A slow figure-eight across the hero.
-  return {
-    x: w * (0.5 + 0.38 * Math.sin(t * 0.32)),
-    y: h * (0.5 + 0.32 * Math.sin(t * 0.64)),
-  }
+/** The lane, in hero-local px, or null if there is none. */
+function area(r: DOMRect): Area | null {
+  if (!laneEl || !laneEl.isConnected) laneEl = hero?.querySelector<HTMLElement>('[data-chase-lane]') ?? null
+  const lr = laneEl?.getBoundingClientRect()
+  if (!lr || lr.height <= 0) return null
+  const lx = lr.left - r.left
+  const cy = lr.top - r.top + lr.height / 2 - 2
+  const mid = lx + lr.width / 2
+  const x0 = lr.width > BUS_W ? lx + BUS_W / 2 : mid
+  const x1 = lr.width > BUS_W ? lx + lr.width - BUS_W / 2 : mid
+  const mx0 = lr.width > MASCOT ? lx + MASCOT / 2 : mid
+  const mx1 = lr.width > MASCOT ? lx + lr.width - MASCOT / 2 : mid
+  return { x0, x1, y0: cy - 3, y1: cy + 3, mx0, mx1 }
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+/** Phase speed: a steady pace across the lane. */
+function omega(a: Area) {
+  return clamp(LANE_SPEED / Math.max(1, a.x1 - a.x0), 0.25, 1.4)
+}
+
+function routePoint(a: Area, t: number) {
+  return {
+    x: a.x0 + (a.x1 - a.x0) * (0.5 + 0.5 * Math.sin(t)),
+    y: (a.y0 + a.y1) / 2 + ((a.y1 - a.y0) / 2) * Math.sin(2 * t),
+  }
+}
 
 function dropPrint() {
   const el = prints.value[printIndex]
@@ -89,6 +131,10 @@ function dropPrint() {
   )
 }
 
+function clearPrints() {
+  prints.value.forEach((el) => el.getAnimations?.().forEach((a) => a.cancel()))
+}
+
 function render(r: DOMRect) {
   if (busEl.value) {
     busEl.value.style.transform =
@@ -101,49 +147,42 @@ function render(r: DOMRect) {
   placed.value = true
 }
 
-/** Put everything in a resting spot (start of the route, or the reduced-motion still). */
+/** Put everything at its resting spot in the lane (the reduced-motion still is the right end). */
 function placeStill() {
   const r = bounds()
   if (!r || !r.width) return
-  const p = reducedMotion.value ? { x: r.width * 0.86, y: r.height - PAD - 8 } : routePoint(r.width, r.height, routeT)
-  bus.x = clamp(p.x, PAD, r.width - PAD)
-  bus.y = clamp(p.y, PAD, r.height - PAD)
-  bus.face = 1
+  const a = area(r)
+  if (!a) {
+    placed.value = false
+    return
+  }
+  const p = reducedMotion.value ? { x: a.x1, y: (a.y0 + a.y1) / 2 } : routePoint(a, routeT)
+  bus.x = clamp(p.x, a.x0, a.x1)
+  bus.y = clamp(p.y, a.y0, a.y1)
+  bus.face = Math.cos(routeT) >= 0 || reducedMotion.value ? 1 : -1
   bus.tilt = 0
-  pal.x = bus.x - LAG_PX
+  pal.x = clamp(bus.x - bus.face * LAG_PX, a.mx0, a.mx1)
   pal.y = bus.y + 4
   lastPrint = { ...pal }
   render(r)
 }
 
-function following(r: DOMRect) {
-  if (!canTrack.value || !pointer.hasMoved.value || pointer.idle.value) return false
-  const px = pointer.x.value
-  const py = pointer.y.value
-  return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom
-}
-
 function tick(now: number) {
   raf = 0
   const r = bounds()
-  if (!r || !r.width) {
+  const a = r && r.width ? area(r) : null
+  if (!r || !a) {
     raf = requestAnimationFrame(tick)
     return
   }
   const dt = Math.min(0.05, Math.max(0, (now - lastTime) / 1000))
   lastTime = now
 
-  let target
-  if (following(r)) {
-    target = { x: pointer.x.value - r.left, y: pointer.y.value - r.top }
-  } else {
-    routeT += dt
-    target = routePoint(r.width, r.height, routeT)
-  }
-  const tx = clamp(target.x, PAD, r.width - PAD)
-  const ty = clamp(target.y, PAD, r.height - PAD)
-
-  // Frame-rate independent easing: the bus is quick, the mascot lags behind it.
+  routeT += dt * omega(a)
+  const target = routePoint(a, routeT)
+  const tx = clamp(target.x, a.x0, a.x1)
+  const ty = clamp(target.y, a.y0, a.y1)
+  // Frame-rate independent easing along the lane.
   const kBus = 1 - Math.exp(-dt * 3.2)
   const prevX = bus.x
   const prevY = bus.y
@@ -151,15 +190,14 @@ function tick(now: number) {
   bus.y += (ty - bus.y) * kBus
   const vx = dt ? (bus.x - prevX) / dt : 0
   const vy = dt ? (bus.y - prevY) / dt : 0
-  if (vx > 24) bus.face = 1
-  else if (vx < -24) bus.face = -1
+  if (vx > 8) bus.face = 1
+  else if (vx < -8) bus.face = -1
   bus.tilt += (clamp(vy * 0.04, -9, 9) * bus.face - bus.tilt) * 0.2
 
+  // The mascot lags behind and stays in the lane, so it bunches up behind the bus at the ends.
   const kPal = 1 - Math.exp(-dt * 2)
-  const aimX = bus.x - bus.face * LAG_PX
-  const aimY = bus.y + 4
-  pal.x += (aimX - pal.x) * kPal
-  pal.y += (aimY - pal.y) * kPal
+  pal.x += (clamp(bus.x - bus.face * LAG_PX, a.mx0, a.mx1) - pal.x) * kPal
+  pal.y += (bus.y + 4 - pal.y) * kPal
 
   if (Math.hypot(pal.x - lastPrint.x, pal.y - lastPrint.y) > STEP_PX) {
     dropPrint()
@@ -172,10 +210,6 @@ function tick(now: number) {
 
 function start() {
   if (raf) return
-  if (!started) {
-    placeStill()
-    started = true
-  }
   lastTime = performance.now()
   raf = requestAnimationFrame(tick)
 }
@@ -192,6 +226,11 @@ watch(reducedMotion, (on) => {
     placeStill()
   }
 })
+// Hand-off: hide at once when the cursor bus appears; jump back into the lane when it goes.
+watch(hidden, (on) => {
+  if (on) clearPrints()
+  else placeStill()
+})
 
 let io: IntersectionObserver | null = null
 let ro: ResizeObserver | null = null
@@ -200,6 +239,13 @@ const onVisibility = () => { tabVisible.value = document.visibilityState !== 'hi
 onMounted(() => {
   onVisibility()
   document.addEventListener('visibilitychange', onVisibility)
+  hero = root.value?.parentElement ?? null
+  if (shared) {
+    shared.lane.locate = () => {
+      const r = bounds()
+      return r && placed.value ? { x: r.left + pal.x, y: r.top + pal.y } : null
+    }
+  }
   if (typeof IntersectionObserver !== 'undefined' && root.value) {
     io = new IntersectionObserver(([entry]) => { inView.value = !!entry?.isIntersecting })
     io.observe(root.value)
@@ -219,12 +265,15 @@ onBeforeUnmount(() => {
   io?.disconnect()
   ro?.disconnect()
   document.removeEventListener('visibilitychange', onVisibility)
+  if (shared) shared.lane.locate = null
+  hero = null
+  laneEl = null
 })
 </script>
 
 <template>
   <div ref="root" class="chase">
-    <div class="chase-layer" :class="{ 'is-placed': placed }" aria-hidden="true">
+    <div class="chase-layer" :class="{ 'is-placed': placed, 'is-hidden': hidden }" aria-hidden="true">
       <span v-for="i in POOL" :key="i" ref="prints" class="chase-print"></span>
 
       <div ref="mascotEl" class="chase-mascot">
@@ -247,23 +296,11 @@ onBeforeUnmount(() => {
         </svg>
       </div>
     </div>
-
-    <button
-      v-if="!reducedMotion"
-      type="button"
-      class="chase-toggle"
-      aria-label="Pause animation"
-      :aria-pressed="paused ? 'true' : 'false'"
-      :title="paused ? 'Play animation' : 'Pause animation'"
-      @click="paused = !paused"
-    >
-      <i class="bi" :class="paused ? 'bi-play-fill' : 'bi-pause-fill'" aria-hidden="true"></i>
-    </button>
   </div>
 </template>
 
 <style scoped>
-/* No z-index here, so the toggle can sit above the hero content while the layer sits below it. */
+/* No z-index here, so the layer can sit below the hero content. */
 .chase {
   position: absolute;
   inset: 0;
@@ -280,6 +317,13 @@ onBeforeUnmount(() => {
 }
 
 .chase-layer.is-placed { opacity: 1; }
+
+/* The cursor bus is on screen: gone in the same frame, no fade, so two buses never show. */
+.chase-layer.is-hidden {
+  visibility: hidden;
+  opacity: 0;
+  transition: none;
+}
 
 .chase-bus,
 .chase-mascot,
@@ -307,36 +351,5 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: var(--wb-green);
   opacity: 0;
-}
-
-.chase-toggle {
-  position: absolute;
-  right: var(--sp-2);
-  bottom: var(--sp-2);
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-pill);
-  background: var(--wb-surface-2);
-  color: var(--wb-text-2);
-  font-size: 1.25rem;
-  pointer-events: auto;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: transform var(--t-micro) var(--ease);
-}
-
-.chase-toggle:hover { transform: translateY(-1px); color: var(--wb-ink); }
-.chase-toggle:active { transform: scale(0.97); }
-.chase-toggle[aria-pressed='true'] { color: var(--wb-green); }
-
-.chase-toggle:focus-visible {
-  outline: 3px solid var(--wb-green);
-  outline-offset: 3px;
 }
 </style>

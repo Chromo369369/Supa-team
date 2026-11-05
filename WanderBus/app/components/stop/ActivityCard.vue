@@ -1,4 +1,6 @@
 <script setup>
+import PhotoViewer from '~/components/ui/PhotoViewer.vue'
+
 // a signpost or a challenge (feature 3). Same header for both, the body depends on activity.kind
 const props = defineProps({
     activity: Object,
@@ -23,7 +25,53 @@ const heading = computed(() => {
 
 const avatarColour = computed(() => userColor(props.activity.author_name))
 
+// the author's best badge (lowest sort_order), fetched in one batch with the other cards (useBadges)
+const badges = useBadges()
+onMounted(() => { if (props.activity.user_id) badges.forUsers([props.activity.user_id]) })
+const badge = computed(() => (props.activity.user_id ? badges.bestOf(props.activity.user_id) : null))
+
 const money = new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' })
+
+// ---- photos: the signpost's own photo, or a challenge's proof photos (loaded the first time they're asked for) ----
+const toast = useToast()
+const { load: loadProofs, forget: forgetProofs } = useChallengeProofs()
+const viewer = ref(null)
+const viewerPhotos = ref([])
+const loadingProofs = ref(false)
+
+const photoAlt = computed(() => `Photo from ${heading.value.charAt(0).toLowerCase() + heading.value.slice(1)}`)
+
+function openSignpostPhoto() {
+    viewerPhotos.value = [{ url: props.activity.photoUrl, alt: photoAlt.value, createdAt: props.activity.created_at }]
+    nextTick(() => viewer.value.open(0))
+}
+
+async function openProofs() {
+    if (loadingProofs.value) return
+    loadingProofs.value = true
+    try {
+        const proofs = await loadProofs(props.activity.id)
+        if (!proofs.length) {
+            toast.info(`No proof photos for “${props.activity.title}” yet.`)
+            return
+        }
+        viewerPhotos.value = proofs.map((proof, i) => ({
+            url: proof.url,
+            alt: `Proof photo ${i + 1} for “${props.activity.title}”`,
+            createdAt: proof.created_at
+        }))
+        await nextTick()
+        viewer.value.open(0)
+    } catch (e) {
+        // most likely the challenge tables aren't set up yet (supabase/stop_activities.sql)
+        toast.error(`Couldn’t load the photos for “${props.activity.title}”. ${e.message}`, { action: { label: 'Retry', run: openProofs } })
+    } finally {
+        loadingProofs.value = false
+    }
+}
+
+// someone (maybe you) just completed it, so the cached list is out of date
+watch(() => props.activity.completedCount, () => forgetProofs(props.activity.id))
 
 function onProofPicked(event) {
     if (event.target.files[0]) emit('complete', props.activity, event.target.files[0])
@@ -46,7 +94,12 @@ function onProofPicked(event) {
                     </button>
                 </h3>
                 <p class="activity-meta">
-                    <template v-if="activity.kind == 'challenge'">Set by {{ activity.isMine ? 'you' : author }} · </template>{{ posted }} · <span class="num">{{ activity.distanceM }} m</span> from the stop
+                    <template v-if="activity.kind == 'challenge'">Set by {{ activity.isMine ? 'you' : author }} </template>
+                    <span v-if="badge" class="author-badge" :title="badge.description || undefined">
+                        <i class="bi" :class="badge.icon || 'bi-award'" aria-hidden="true"></i>
+                        <span class="visually-hidden">{{ activity.isMine ? 'Your' : `${activity.author_name}’s` }} badge: </span>{{ badge.name }}
+                    </span>
+                    <template v-if="activity.kind == 'challenge' || badge"> · </template>{{ posted }} · <span class="num">{{ activity.distanceM }} m</span> from the stop
                 </p>
             </div>
         </header>
@@ -59,8 +112,9 @@ function onProofPicked(event) {
                 <span class="rating-text num" aria-hidden="true">{{ activity.rating }}/5</span>
             </p>
             <p class="activity-text">{{ activity.note }}</p>
-            <img v-if="activity.photoUrl" :src="activity.photoUrl" :alt="`Photo from ${heading.charAt(0).toLowerCase() + heading.slice(1)}`"
-                width="280" height="280" class="activity-photo" loading="lazy" decoding="async" />
+            <button v-if="activity.photoUrl" type="button" class="activity-photo-btn" :aria-label="`Open the ${photoAlt.charAt(0).toLowerCase() + photoAlt.slice(1)}`" @click="openSignpostPhoto">
+                <img :src="activity.photoUrl" :alt="photoAlt" width="280" height="210" class="activity-photo" loading="lazy" decoding="async" />
+            </button>
             <p v-if="activity.spent !== null" class="activity-small">Spent <span class="num">{{ money.format(Number(activity.spent)) }}</span></p>
         </template>
 
@@ -89,6 +143,11 @@ function onProofPicked(event) {
                     {{ busy ? 'Uploading…' : 'Complete with a photo' }}
                 </button>
                 <span class="activity-small mb-0"><span class="num">{{ activity.completedCount }}</span> completed</span>
+                <button v-if="activity.completedCount > 0" type="button" class="btn-wb-ghost btn-sm proofs-btn" :disabled="loadingProofs" :aria-busy="loadingProofs ? 'true' : undefined" @click="openProofs">
+                    <i v-if="!loadingProofs" class="bi bi-images" aria-hidden="true"></i>
+                    <template v-if="loadingProofs">Loading photos…</template>
+                    <template v-else>See <span class="num">{{ activity.completedCount }}</span> {{ activity.completedCount === 1 ? 'photo' : 'photos' }}</template>
+                </button>
                 <input ref="fileInput" type="file" accept="image/*" class="d-none" tabindex="-1" aria-hidden="true" @change="onProofPicked" />
             </template>
 
@@ -101,6 +160,8 @@ function onProofPicked(event) {
                 </button>
             </span>
         </footer>
+
+        <PhotoViewer ref="viewer" :photos="viewerPhotos" :title="activity.kind == 'challenge' ? `Proof photos for “${activity.title}”` : `Photo from ${heading.charAt(0).toLowerCase() + heading.slice(1)}`" />
     </article>
 </template>
 
@@ -190,6 +251,19 @@ function onProofPicked(event) {
   margin: 0;
 }
 
+.author-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--wb-rarity-legendary-tint);
+  color: var(--wb-ink);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.author-badge .bi { color: var(--wb-amber-ink); }
+
 .stars {
   display: flex;
   align-items: center;
@@ -219,12 +293,38 @@ function onProofPicked(event) {
   margin: 0 0 var(--sp-2);
 }
 
+/* the signpost photo is a button that opens it larger */
+.activity-photo-btn {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--r-control);
+  margin-bottom: var(--sp-2);
+  cursor: zoom-in;
+}
+
+.activity-photo-btn:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
+}
+
+.activity-photo-btn .activity-photo {
+  margin-bottom: 0;
+}
+
+.proofs-btn:hover {
+  background: var(--wb-surface);
+}
+
 .activity-photo {
   display: block;
   width: 100%;
   max-width: 280px;
   height: auto;
-  aspect-ratio: 1;
+  aspect-ratio: 4 / 3;   /* every activity photo gets the same crop */
   object-fit: cover;
   border-radius: var(--r-control);
   margin-bottom: var(--sp-2);

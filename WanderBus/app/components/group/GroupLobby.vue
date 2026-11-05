@@ -1,6 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import SeatMap from '~/components/group/SeatMap.vue'
+import LedBoard from '~/components/ui/LedBoard.vue'
+import WanderMascot from '~/components/ui/WanderMascot.vue'
+import SpinFilters from '~/components/spin/SpinFilters.vue'
+import SpinResults from '~/components/spin/SpinResults.vue'
 
 const emit = defineEmits(['leave'])
 
@@ -83,9 +87,11 @@ async function saveTrip(){
                 alert(`Could not save your trip: ${error.message}`)
                 return
             }
+
             await trackEvent('passport_entry')
             alert('Your entry has been saved successfully, to view it, please head to the passport page!')
-            
+            toast.success('Saved to your passport')
+
                 
         }catch(e){
             console.log(e)
@@ -262,90 +268,168 @@ async function copyCode() {
 </script>
 
 <template>
-  <div class="row g-4 mt-2">
-    <div class="col-12 col-lg-4">
+  <!-- F1's proportions: a 340px lobby column (like the filter column) and the ticket stage beside it -->
+  <div class="lobby-grid" :class="{ 'has-dock': ready }">
+    <div class="lobby-col">
       <div class="lobby-card">
-        <h2>Everyone aboard?</h2>
-        <p>Wait here while your friends join the crew.</p>
+        <div class="lobby-head">
+          <h2>Crew lobby</h2>
+          <p>Share the code so friends can join. Once everyone’s here, the host spins for the crew.</p>
+        </div>
 
-        <p class="code-label">Crew code</p>
-        <div class="group-code num">{{ group.group_code }}</div>
+        <div class="lobby-seats">
+          <!-- the crew LED rides on top of the bus -->
+          <SeatMap
+            v-if="!hostLeft && !loadingMembers && !membersError"
+            compact
+            :show-sign="true"
+            :members="groupMembers"
+            :host-name="hostName"
+            :host-id="group.host_id"
+            :is-host="isHost"
+            :code="group.group_code"
+            :current-user-id="currentUserId"
+          />
+          <!-- no bus to sit on (loading, error, host left): the sign stays on its own -->
+          <div v-else class="crew-sign">
+            <LedBoard
+              class="crew-sign__led"
+              badge=""
+              :pitch="3"
+              :line1="`CREW ${group.group_code}`"
+              :label="`Crew ${group.group_code}`"
+            />
+          </div>
 
-        <button
-          type="button"
-          class="btn-wb-ghost lobby-button copy-button"
-          @click="copyCode"
-        >
-          <i class="bi bi-clipboard" aria-hidden="true"></i>
-          Copy code
-        </button>
-
-        <button
-          type="button"
-          class="btn-wb-secondary lobby-button leave-button"
-          :disabled="leavingGroup || loadingMembers"
-          :aria-busy="leavingGroup ? 'true' : undefined"
-          @click="leaveGroup"
-        >
-          {{ leavingGroup ? 'Leaving…' : 'Leave crew' }}
-        </button>
-      </div>
-    </div>
-
-    <div class="col-12 col-lg-8">
-      <div class="lobby-card">
-        <h2>Crew lobby</h2>
-        <p>Once everyone’s here, the host spins for the crew.</p>
-
-        <div v-if="hostLeft" class="member-row host-left" role="status">
-          <i class="bi bi-person-dash host-icon" aria-hidden="true"></i>
-          <div class="member-details">
-            <strong>Host left</strong>
-            <span>Nobody can start the spin without a host. Leave this crew, then host or join another.</span>
+          <div v-if="hostLeft" class="member-row host-left" role="status">
+            <i class="bi bi-person-dash host-icon" aria-hidden="true"></i>
+            <div class="member-details">
+              <strong>Host left</strong>
+              <span>Nobody can start the spin without a host. Leave this crew, then host or join another.</span>
+            </div>
           </div>
         </div>
 
-        <SeatMap
-          v-if="!hostLeft && !loadingMembers && !membersError"
-          class="lobby-seats"
-          :members="groupMembers"
-          :host-name="hostName"
-          :is-host="isHost"
-          :code="group.group_code"
-          :current-user-id="currentUserId"
-        />
+        <div class="lobby-foot">
+          <div class="waiting-box" aria-live="polite">
+            <span v-if="loadingMembers">Loading your crew…</span>
+            <span v-else-if="membersError" role="alert">{{ membersError }}</span>
+            <span v-else-if="!hostLeft && groupMembers.length == 0">
+              Waiting for friends to join…
+            </span>
+          </div>
 
-        <div class="waiting-box" aria-live="polite">
-          <span v-if="loadingMembers">Loading your crew…</span>
-          <span v-else-if="membersError" role="alert">{{ membersError }}</span>
-          <span v-else-if="!hostLeft && groupMembers.length == 0">
-            Waiting for friends to join…
-          </span>
+          <p v-if="!isHost && !loadingMembers && !hostLeft" id="spin-hint" class="spin-hint">
+            Only the host can start the spin.
+          </p>
+
+          <div class="lobby-actions">
+            <button
+              type="button"
+              class="btn-wb-ghost lobby-button copy-button"
+              @click="copyCode"
+            >
+              <i class="bi bi-clipboard" aria-hidden="true"></i>
+              Copy code
+            </button>
+
+            <button
+              type="button"
+              class="btn-wb-primary lobby-button ready-button"
+              :disabled="!isHost"
+              :hidden="!isHost"
+              @click="ready=true"
+            >
+              Ready
+            </button>
+            <button
+              type="button"
+              class="btn-wb-primary lobby-button ready-button"
+              :disabled="!isHost && !sharedSpin"
+              :hidden="isHost"
+              @click="ready=true"
+            >
+              Waiting for host to spin…
+            </button>
+
+            <button
+              type="button"
+              class="btn-wb-secondary lobby-button leave-button"
+              :disabled="leavingGroup || loadingMembers"
+              :aria-busy="leavingGroup ? 'true' : undefined"
+              @click="leaveGroup"
+            >
+              {{ leavingGroup ? 'Leaving…' : 'Leave crew' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-col">
+      <!-- the ticket card: the ticket (with SpinResults' own LED on top) first, the filters under it -->
+      <div class="ticket-col">
+        <!-- what the ticket column says before there is a ticket to show -->
+        <div v-if="loadingMembers" class="ticket-wait">
+          <WanderMascot mood="loading" :size="64" />
+          <div>
+            <h2>Crew ticket</h2>
+            <p>Loading the ticket…</p>
+          </div>
+        </div>
+        <div v-else-if="membersError || hostLeft" class="ticket-wait">
+          <WanderMascot mood="sad" :size="64" />
+          <div>
+            <h2>Crew ticket</h2>
+            <p>No ticket without a host and a crew.</p>
+          </div>
+        </div>
+        <div v-else-if="isHost && !ready && !sharedSpin" class="ticket-wait">
+          <WanderMascot mood="idle" :size="64" />
+          <div>
+            <h2>Crew ticket</h2>
+            <p>Tap Ready when everyone’s aboard. Your filters open here, and the ticket you spin is shared with the crew.</p>
+          </div>
+        </div>
+        <div v-else-if="!isHost && !sharedSpin" class="ticket-wait">
+          <WanderMascot mood="sleepy" :size="64" />
+          <div>
+            <h2>Crew ticket</h2>
+            <p>Waiting for the host to spin…</p>
+          </div>
         </div>
 
-        <p v-if="!isHost && !loadingMembers && !hostLeft" id="spin-hint" class="spin-hint">
-          Only the host can start the spin.
-        </p>
-        <button
-          type="button"
-          class="lobby-button green-button"
-          :disabled="!isHost"
-          :hidden="!isHost"
-          @click="ready=true"
-        >
-          Ready
-        </button>
-        <button
-          type="button"
-          class="lobby-button green-button"
-          :disabled="!isHost && !sharedSpin"
-          :hidden="isHost"
-          @click="ready=true"
-        >
-          Waiting for host to spin...
-        </button>
+        <Transition name="ticket-in" appear>
+          <SpinResults
+          v-if="submitted"
+          :submitted="submitted"
+          :error-message="result?.errorMessage"
+          :chosen-stop="result?.chosenStop"
+          :stop-details="result?.stopDetails"
+          :start-details="result?.startDetails"
+          :starting-stops="result?.startingStops"
+          :preferences="preferences"
+          @reroll="respin2()"
+          @save-trip="saveTrip()"
+          />
+        </Transition>
+        <Transition name="ticket-in" appear>
+          <SpinResults
+            v-if="!submitted && sharedSpin"
+            :submitted="true"
+            :chosen-stop="sharedSpin.chosenStop"
+            :stop-details="sharedSpin.stopDetails"
+            :start-details="sharedSpin.startDetails"
+            :starting-stops="sharedSpin.startingStops"
+            :preferences="sharedSpin.preferences"
+            @reroll="respin2()"
+            @save-trip="saveTrip()"
+          />
+        </Transition>
+
         <SpinFilters
         v-if="ready"
+        class="ticket-filters"
         v-model:travelTime="travelTime"
         v-model:starting-location="startingLocation"
         v-model:selected-place="selectedPlace"
@@ -354,98 +438,110 @@ async function copyCode() {
         :places="locResponse.data.value"
         @submit="spin2()"
         />
-        <SpinResults
-        v-if="isHost && submitted & (!result || result.errorMessage)"
-        :submitted="submitted"
-        :error-message="result?.errorMessage"
-        :chosen-stop="result?.chosenStop"
-        :stop-details="result?.stopDetails"
-        :start-details="result?.startDetails"
-        :starting-stops="result?.startingStops"
-        :preferences="preferences"
-        @reroll="respin2()"
-        @save-trip="saveTrip()"
-        />
-        <SpinResults
-          v-else-if="sharedSpin"
-          :submitted="true"
-          :chosen-stop="sharedSpin.chosenStop"
-          :stop-details="sharedSpin.stopDetails"
-          :start-details="sharedSpin.startDetails"
-          :starting-stops="sharedSpin.startingStops"
-          :preferences="sharedSpin.preferences"
-          @reroll="respin2()"
-          @save-trip="saveTrip()"
-        />
-        
-    
-
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.lobby-card {
-  height: 100%;
-  padding: var(--sp-5);
-  background: var(--wb-surface);
-  border-radius: var(--r-card);
-  display: flex;
-  flex-direction: column;
+/* ── layout ──
+   F1's proportions (home.vue .spin-layout): a 340px column on the left, here the crew lobby in
+   place of the filters, and the ticket stage taking the rest. Phones stack, lobby first. */
+.lobby-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5);
+  margin-top: var(--sp-2);
 }
 
-.lobby-card h2 {
-  margin: 0 0 var(--sp-2);
+.lobby-col,
+.stage-col {
+  min-width: 0;
+}
+
+@media (min-width: 992px) {
+  .lobby-grid {
+    grid-template-columns: 340px minmax(0, 1fr);
+    gap: var(--sp-6);
+    align-items: start;
+  }
+
+}
+
+/* the lobby rides along like F1's filter bar, when the screen is tall enough to show all of it */
+@media (min-width: 992px) and (min-height: 760px) {
+  .lobby-col {
+    position: sticky;
+    top: 90px;
+  }
+}
+
+/* ── crew lobby card: header, the bus with its LED, then the actions ── */
+.lobby-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--wb-surface);
+  border-radius: var(--r-card);
+}
+
+.lobby-head,
+.lobby-seats,
+.lobby-foot {
+  min-width: 0;
+}
+
+.lobby-seats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.lobby-card h2,
+.ticket-wait h2 {
+  margin: 0 0 var(--sp-1);
   font-family: var(--font-ui);
   font-size: var(--fs-lead);
   font-weight: 600;
 }
 
-.lobby-card p {
-  margin: 0 0 var(--sp-4);
+.lobby-card p,
+.ticket-wait p {
+  margin: 0;
   color: var(--wb-text-2);
 }
 
-.lobby-card .code-label {
-  margin: var(--sp-2) 0 var(--sp-2);
-  color: var(--wb-ink);
-  font-weight: 500;
+.lobby-head p {
+  font-size: var(--fs-small);
 }
 
-.group-code {
+/* the LED on its own while there is no bus to put it on: same size and place as on the bus */
+.crew-sign {
   width: 100%;
-  min-width: 0;
-  padding: var(--sp-4) var(--sp-2);
-  margin-bottom: var(--sp-3);
-  border-radius: var(--r-control);
-  background: var(--wb-surface-2);
-  color: var(--wb-ink);
-  text-align: center;
-  font-family: var(--font-display);
-  font-size: var(--fs-title);
-  font-weight: 600;
-  letter-spacing: 0.15em;
-  overflow-wrap: anywhere;
+  max-width: 340px;
+  margin: 0 auto;
+  padding: 0 5%;
 }
 
-.lobby-button {
+.crew-sign__led {
   width: 100%;
 }
 
 .copy-button {
-  margin-bottom: var(--sp-5);
+  background: var(--wb-surface-2);
+  color: var(--wb-ink);
 }
 
-.leave-button {
-  margin-top: auto;
+.copy-button:hover {
+  background: var(--wb-line);
 }
 
 .member-row {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3);
   border-radius: var(--r-control);
   background: var(--wb-surface-2);
 }
@@ -475,27 +571,20 @@ async function copyCode() {
   flex-direction: column;
   align-items: center;
   gap: var(--sp-2);
-  margin: var(--sp-3) 0 var(--sp-5);
-  padding: var(--sp-5) var(--sp-4);
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-3);
   border-radius: var(--r-control);
   background: var(--wb-surface-2);
   text-align: center;
   color: var(--wb-text-2);
-}
-.lobby-card :deep(.filters) {
-  position: static;
+  font-size: var(--fs-small);
 }
 
 /* nothing to say once the crew has loaded: collapse the well, keep the live region */
 .waiting-box:empty {
-  margin: 0 0 var(--sp-5);
+  margin: 0;
   padding: 0;
   background: none;
-}
-
-.lobby-seats {
-  margin-top: var(--sp-2);
-  margin-bottom: var(--sp-4);
 }
 
 .lobby-card .spin-hint {
@@ -504,8 +593,83 @@ async function copyCode() {
   font-size: var(--fs-small);
 }
 
-.lobby-card .spin-hint + .lobby-button,
-.lobby-card .waiting-box + .lobby-button {
-  margin-top: auto;
+/* the actions: Copy code, Ready (or the member's waiting button) and Leave crew, stacked full
+   width; 340px is too narrow for the long waiting label to share a row */
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.lobby-button {
+  width: 100%;
+  min-height: 44px;
+}
+
+.lobby-button[hidden] {
+  display: none;
+}
+
+/* ── ticket stage: the ticket (or what to expect) first, the filters under it ── */
+.ticket-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* the filters stay in the stage instead of sticking on their own (the lobby column is the sticky
+   one); phones keep Bootstrap's bottom sheet untouched */
+@media (min-width: 992px) {
+  .ticket-col :deep(.filters),
+  .ticket-col :deep(.filters-sheet) {
+    position: static;
+  }
+}
+
+.ticket-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  background: var(--wb-surface);
+  border-radius: var(--r-card);
+}
+
+.ticket-wait > div {
+  min-width: 0;
+}
+
+/* the ticket slides in once there is one */
+.ticket-in-enter-active {
+  transition: opacity var(--t-reveal) var(--ease), transform var(--t-reveal) var(--ease);
+}
+
+.ticket-in-leave-active {
+  transition: opacity var(--t-micro) var(--ease);
+}
+
+.ticket-in-enter-from {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+.ticket-in-leave-to {
+  opacity: 0;
+}
+
+/* phones: leave room for the filters dock fixed to the bottom of the screen */
+@media (max-width: 991.98px) {
+  .lobby-grid.has-dock {
+    padding-bottom: 112px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-in-enter-active,
+  .ticket-in-leave-active {
+    transition: none;
+  }
 }
 </style>

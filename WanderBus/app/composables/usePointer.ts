@@ -12,7 +12,7 @@
 
 import { computed, onBeforeUnmount, onMounted, readonly, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 
-export const POINTER_IDLE_MS = 20_000
+export const POINTER_IDLE_MS = 10_000
 
 /* ── pointer state (module level, shared) ── */
 const x = ref(0)

@@ -1,15 +1,21 @@
 <script setup>
 import WanderMascot from '~/components/ui/WanderMascot.vue'
+import { passColors } from '~/components/profile/BusPassCard.vue'
 const {$supabase} = useNuxtApp()
+const adventure = useAdventure()
 const valid_session = ref(false)
+const user_name = ref('')   // picks the avatar's colour, the same one as on the bus pass and signposts
 async function check_session(event){
   const {data,error} = await $supabase.auth.getUser()
   if(data.user){
     valid_session.value = true
+    user_name.value = data.user.user_metadata?.display_name || data.user.email?.split('@')[0] || ''
   }else{
     valid_session.value = false
+    user_name.value = ''
   }
   if (event == 'SIGNED_OUT'){
+    adventure.end()   // a running adventure belongs to the account that started it
     await navigateTo('/',{replace:true})
   }
 }
@@ -34,6 +40,15 @@ onUnmounted(() =>
                 <NuxtLink to="/" class="navbar-brand header-brand">
                     <WanderMascot :size="24" gaze />
                     <span>WanderBus</span>
+                </NuxtLink>
+
+                <!-- Your mascot, in your colour: outside the collapse so it shows on phones too.
+                     Sits left of the menu button on phones, after the links on desktop (order). -->
+                <NuxtLink v-if="valid_session" to="/profile" class="header-avatar" aria-label="Your profile"
+                          :style="{ background: passColors(user_name)[1] }">
+                    <!-- the captain's cap is a shop perk (useRewards); only your own mascot wears it -->
+                    <WanderMascot :size="32" :color="passColors(user_name)[0]"
+                                  :hat="useRewards().isOn('perk-mascot-captain') ? 'captain' : null" />
                 </NuxtLink>
 
                 <button class="navbar-toggler header-toggler" type="button"
@@ -94,6 +109,41 @@ onUnmounted(() =>
   min-width: 44px;
   min-height: 44px;
   border-color: var(--wb-control);
+}
+
+/* Profile avatar: a 44px round target holding a 32px mascot on its own tint */
+.header-avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  margin-right: var(--sp-2);
+  border-radius: 50%;
+  transition: transform var(--t-micro) var(--ease);
+}
+
+.header-avatar:hover {
+  transform: translateY(-1px);
+}
+
+.header-avatar:focus-visible {
+  outline: 3px solid var(--wb-green);
+  outline-offset: 2px;
+}
+
+/* on /profile a green ring marks it as the page you are on */
+.header-avatar.router-link-active {
+  outline: 2px solid var(--wb-green);
+  outline-offset: 2px;
+}
+
+@media (min-width: 768px) {
+  .header-avatar {
+    order: 1;
+    margin-left: var(--sp-2);
+    margin-right: 0;
+  }
 }
 
 .header-link {
