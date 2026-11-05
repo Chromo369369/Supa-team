@@ -7,7 +7,8 @@
     import PhotoViewer from '~/components/ui/PhotoViewer.vue';
     //Check for session validity first
     definePageMeta( {middleware: 'auth' })
-
+    const {$supabase} = useNuxtApp()
+    
     const route = useRoute()
     const router = useRouter()
     const toast = useToast()
@@ -31,12 +32,35 @@
     const search = ref(typeof route.query.q === 'string' ? route.query.q : '')   // the search field, kept in ?q=
     const searchInput = ref(null)
 
-    const { photosByPlace, loadError: photosError, loadPhotosNear, uploadPhoto } = usePlacePhotos()
+    const { photosByPlace, loadError: photosError, loadPhotosNear, uploadPhoto, deletePhoto } = usePlacePhotos()
     const { activities, loadError: activitiesError, loadActivities, saveActivity, deleteActivity, toggleHelpful, completeChallenge } = useStopActivities()
     const uploadingId = ref('')
     const busyKey = ref('')               // the signpost/challenge whose vote or completion is saving
     const notice = ref(null)    // { type: 'success' | 'error', text }, for hints about the map itself
-
+    // admins can delete any photo, signpost or challenge on this page
+    const isAdmin = ref(false)
+    onMounted(async () => {
+        const { data: { user } } = await $supabase.auth.getUser()
+        if (!user) return
+        const { data: admin } = await $supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle()
+        isAdmin.value = !!admin
+    })
+    async function removePhoto(place, photo) {
+    const ok = await confirm({
+        title: `Delete this photo of ${place.name}?`,
+        body: 'It will be removed for everyone.',
+        confirmLabel: 'Delete photo',
+        danger: true
+    })
+    if (!ok) return
+    try {
+        await deletePhoto(photo)
+        toast.success('Photo deleted.')
+    } catch (e) {
+        toast.error(`Couldn’t delete the photo. ${e.message}`)
+    }
+}
+    
     // ?tab=&section=&sub= keep the filters in the URL, so a reload or a shared link opens the same view
     function fromQuery(name, allowed) {
         let value = route.query[name]
@@ -123,19 +147,31 @@
             }))
     })
 
+    
     async function handleUpload(place, file) {
         uploadingId.value = place.id
+
         try {
-            const photo = await uploadPhoto(file, place, data.value.stop.code)
-            toast.success(photo.is_pioneer
-                ? `You’re the Pioneer of ${place.name}! +100 credits`
-                : `Thanks! Your photo of ${place.name} is up.`)
+            await uploadPhoto(file, place, data.value.stop.code)
+
+            toast.success(
+                `Photo of ${place.name} submitted! Waiting for admin approval.`
+            )
         } catch (e) {
-            toast.error(`Couldn’t upload your photo of ${place.name}. ${e.message}`, { action: { label: 'Retry', run: () => handleUpload(place, file) } })
+            toast.error(
+                `Couldn't upload your photo of ${place.name}. ${e.message}`,
+                {
+                    action: {
+                        label: 'Retry',
+                        run: () => handleUpload(place, file)
+                    }
+                }
+            )
         } finally {
             uploadingId.value = ''
         }
     }
+
 
     // how many places per section and per sub-filter, and how many signposts/challenges
     const counts = computed(() => {
@@ -341,7 +377,7 @@
 
     async function removeActivity(activity) {
         const ok = await confirm({
-            title: `Delete your ${activity.kind} at ${data.value.stop.name}?`,
+            title: `Delete this ${activity.kind} at ${data.value.stop.name}?`,
             body: `“${shorten(activity.kind == 'signpost' ? activity.note : activity.title)}” will be removed for everyone.`,
             confirmLabel: `Delete ${activity.kind}`
         })
@@ -662,6 +698,7 @@
                                 :selected="item.key === selectedId"
                                 :busy="busyKey === item.key"
                                 :class="{ 'is-linked': hoverId === item.key, 'is-fresh': freshKey === item.key }"
+                                :is-admin="isAdmin"
                                 @mouseenter="hoverId = item.key"
                                 @mouseleave="hoverId = ''"
                                 @focusin="hoverId = item.key"
@@ -679,6 +716,8 @@
                                 :selected="item.id === selectedId"
                                 :class="{ 'is-linked': hoverId === item.id }"
                                 :photos="photosByPlace[item.id]"
+                                :is-admin="isAdmin"
+                                @delete-photo="removePhoto"
                                 @mouseenter="hoverId = item.id"
                                 @mouseleave="hoverId = ''"
                                 @focusin="hoverId = item.id"

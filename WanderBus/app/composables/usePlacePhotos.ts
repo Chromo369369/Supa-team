@@ -23,7 +23,8 @@ export const usePlacePhotos = () => {
     const dLon = radiusM / (111320 * Math.cos(stop.lat * Math.PI / 180))
     const { data, error } = await $supabase
       .from('place_photos')
-      .select('id, place_id, path, is_pioneer, created_at')
+      .select('id, place_id, path, is_pioneer, created_at, status')
+      .eq('status', 'approved')
       .gte('lat', stop.lat - dLat).lte('lat', stop.lat + dLat)
       .gte('lon', stop.lon - dLon).lte('lon', stop.lon + dLon)
       .order('created_at', { ascending: false })
@@ -33,10 +34,11 @@ export const usePlacePhotos = () => {
       loadError.value = error.message
       return
     }
+    const rows = data.map(withUrl)
     const grouped: Record<string, any[]> = {}
-    for (const row of data) {
+    for (const row of rows) {
       if (row.place_id in grouped == false) grouped[row.place_id] = []
-      grouped[row.place_id]!.push(withUrl(row))
+      grouped[row.place_id]!.push(row)
     }
     photosByPlace.value = grouped
   }
@@ -54,18 +56,17 @@ export const usePlacePhotos = () => {
     const upload = await $supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type })
     if (upload.error) throw new Error(upload.error.message)
 
-    const { data, error } = await $supabase
-      .from('place_photos')
-      .insert({
-        place_id: place.id,
-        place_name: place.name,
-        stop_code: stopCode,
-        lat: place.lat,
-        lon: place.lon,
-        path
-      })
-      .select('id, place_id, path, is_pioneer, created_at')
-      .single()
+  const { error } = await $supabase
+    .from('place_photos')
+    .insert({
+      place_id: place.id,
+      place_name: place.name,
+      stop_code: stopCode,
+      lat: place.lat,
+      lon: place.lon,
+      path,
+      status: 'pending'
+    })
 
     if (error) {
       // don't leave an orphan file behind if the row was rejected (e.g. daily limit)
@@ -73,10 +74,18 @@ export const usePlacePhotos = () => {
       throw new Error(error.message)
     }
 
-    const photo = withUrl(data)
-    photosByPlace.value = { ...photosByPlace.value, [place.id]: [photo, ...(photosByPlace.value[place.id] || [])] }
-    return photo
+    return { status: 'pending' }
   }
-
-  return { photosByPlace, loadError, loadPhotosNear, uploadPhoto }
+  async function deletePhoto(photo:any){
+    const { data, error } = await $supabase.from('place_photos').delete().eq('id', photo.id).select('id')
+    if (error) throw new Error(error.message)
+    if (!data?.length) throw new Error('You don’t have permission to delete this photo')
+    await $supabase.storage.from(BUCKET).remove([photo.path])
+    photosByPlace.value = {
+      ...photosByPlace.value,
+      [photo.place_id]: (photosByPlace.value[photo.place_id] || []).filter((p: any) => p.id != photo.id)
+    }
+  }
+  return { photosByPlace, loadError, loadPhotosNear, uploadPhoto, deletePhoto }
 }
+
