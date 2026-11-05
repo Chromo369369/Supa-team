@@ -27,8 +27,8 @@ export default defineNuxtConfig({
     ltaAccountKey:'',
     onemapToken:'',
     public: {
-      supabaseUrl: '',
-      supabaseKey: ''
+      supabaseUrl: 'https://yqtrlcaggawzcdjidxyb.supabase.co',
+      supabaseKey: 'sb_publishable_as8YZ4tW4W1d8j2oFAfeBQ_NsOmnkAn'
     }
   },
 })
