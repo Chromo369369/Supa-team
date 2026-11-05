@@ -38,6 +38,21 @@ const submitted= ref(false)
 const response = await useFetch('/api/allBusStops')
 const sharedSpin = ref(null)
 
+
+async function trackEvent(eventType) {
+  const { error } = await $supabase
+    .from('analytics_events')
+    .insert({
+      event_type: eventType,
+      trip_type: 'group'
+    })
+
+  if (error) {
+    console.error('Analytics tracking failed:', error.message)
+  }
+}
+
+
 async function shareSpin(){
   if (!result.value){
     return
@@ -72,8 +87,11 @@ async function saveTrip(){
                 alert(`Could not save your trip: ${error.message}`)
                 return
             }
+
+            await trackEvent('passport_entry')
+            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
             toast.success('Saved to your passport')
-            
+
                 
         }catch(e){
             console.log(e)
@@ -96,10 +114,19 @@ async function respin2(){
 }
 
 async function spin2(){
-  submitted.value=true
+  submitted.value = true
   result.value = null
-  result.value = await spin(preferences.value,selectedPlace.value,travelTime.value,submitted.value)
+  result.value = await spin(
+    preferences.value,
+    selectedPlace.value,
+    travelTime.value,
+    submitted.value
+  )
+
+  if (!result.value) return
+
   await shareSpin()
+  await trackEvent('spin')
 }
 
 const hostLeft = ref(null)

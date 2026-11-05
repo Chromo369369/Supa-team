@@ -11,10 +11,18 @@ export const usePlacePhotos = () => {
   const photosByPlace = ref<Record<string, any[]>>({})
   const loadError = ref('')   // set when the photos couldn't be loaded, so the page can show it with a Retry
 
-  function withUrl(row: any) {
-    const { data } = $supabase.storage.from(BUCKET).getPublicUrl(row.path)
-    return { ...row, url: data.publicUrl }
+async function withUrl(row: any) {
+  const { data, error } = await $supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(row.path, 3600)
+
+  if (error) {
+    console.error('Error loading photo:', error.message)
+    return { ...row, url: null }
   }
+
+  return { ...row, url: data.signedUrl }
+}
 
   // every photo inside the box around the walking circle, in one query
   async function loadPhotosNear(stop: { lat: number, lon: number }, radiusM: number) {
@@ -23,7 +31,8 @@ export const usePlacePhotos = () => {
     const dLon = radiusM / (111320 * Math.cos(stop.lat * Math.PI / 180))
     const { data, error } = await $supabase
       .from('place_photos')
-      .select('id, place_id, path, is_pioneer, created_at')
+      .select('id, place_id, path, is_pioneer, created_at, status')
+      .eq('status', 'approved')
       .gte('lat', stop.lat - dLat).lte('lat', stop.lat + dLat)
       .gte('lon', stop.lon - dLon).lte('lon', stop.lon + dLon)
       .order('created_at', { ascending: false })
@@ -54,18 +63,17 @@ export const usePlacePhotos = () => {
     const upload = await $supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type })
     if (upload.error) throw new Error(upload.error.message)
 
-    const { data, error } = await $supabase
-      .from('place_photos')
-      .insert({
-        place_id: place.id,
-        place_name: place.name,
-        stop_code: stopCode,
-        lat: place.lat,
-        lon: place.lon,
-        path
-      })
-      .select('id, place_id, path, is_pioneer, created_at')
-      .single()
+  const { error } = await $supabase
+    .from('place_photos')
+    .insert({
+      place_id: place.id,
+      place_name: place.name,
+      stop_code: stopCode,
+      lat: place.lat,
+      lon: place.lon,
+      path,
+      status: 'pending'
+    })
 
     if (error) {
       // don't leave an orphan file behind if the row was rejected (e.g. daily limit)
@@ -73,9 +81,7 @@ export const usePlacePhotos = () => {
       throw new Error(error.message)
     }
 
-    const photo = withUrl(data)
-    photosByPlace.value = { ...photosByPlace.value, [place.id]: [photo, ...(photosByPlace.value[place.id] || [])] }
-    return photo
+    return { status: 'pending' }
   }
 
   return { photosByPlace, loadError, loadPhotosNear, uploadPhoto }
