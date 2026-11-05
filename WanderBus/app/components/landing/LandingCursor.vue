@@ -1,33 +1,3 @@
-<!--
-  LandingCursor: the page-wide cursor bus on the landing page (plan round 2, Wave 1 A), and the
-  corner pill that turns it on and off. Original WanderBus drawing.
-
-  Mount once, as the last child of the landing root (pages/index.vue: `<div class="landing">`),
-  under a parent that provides the shared state:
-
-      provide(BUS_CURSOR_KEY, createBusCursorState())
-
-  Cursor bus
-  - A `position: fixed; inset: 0` layer (aria-hidden, pointer-events: none) holding the mini bus,
-    the mascot that follows it (and looks at it) and a pool of 12 footprints that fade over 1.2 s.
-    The bus is drawn exactly at the pointer in client coords, so it stays glued while scrolling.
-  - Only with `(pointer: fine)`, no reduced motion, the pill on, the tab visible and a mouse or pen
-    inside the landing root. Then the root gets `landing--bus-cursor` (`cursor: none`, scoped to
-    the landing page, never global).
-  - Over a link, button, [role=button], input, select, textarea, label or the ticket's tear stub
-    (found with `closest(…)`), the native cursor returns and the bus parks beside it, faded.
-  - Otherwise (no pointer yet, pointer outside the landing or the window, touch, coarse pointer,
-    pill off) the layer is empty and HeroChase shows its lane bus in the hero instead.
-
-  Hand-off (one bus on screen, never two): this component writes `state.active`. HeroChase hides
-  its lane bus while it is true and jumps back into the lane when it turns false. When the cursor
-  bus takes over, its mascot starts where the lane mascot stands (`state.lane.locate()`) and walks over.
-
-  Pill: "Bus cursor on" / "Bus cursor off", aria-pressed, remembered per tab in sessionStorage
-  (`wb-bus-cursor`, every access in try/catch). Off also stops the lane bus. Hidden under reduced
-  motion. It rides in a sticky dock at the end of the landing root, so it floats bottom right while
-  you scroll and comes to rest below the CTA, never over the CTA button or the footer.
--->
 <script lang="ts">
 import { ref, type InjectionKey, type Ref } from 'vue'
 
@@ -98,7 +68,6 @@ let raf = 0
 let lastTime = 0
 let landing: HTMLElement | null = null
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 /* ── storage ── */
 function readPref(): boolean | null {

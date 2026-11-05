@@ -1,37 +1,3 @@
-<!--
-  Bus3D: the WanderBus as a real 3D object, built from a CSS 3D box (preserve-3d) with six inline-SVG
-  faces. Same green body, ink windows, amber LED and mascot as BusDriveBy, seen from any angle.
-  Original WanderBus drawing, no ported source.
-
-  Props
-    rotation  { x, y } in degrees; applied as rotateX(x) rotateY(y). Reactive, so a parent can feed
-              it every frame. The component only applies the transform; the parent does the easing.
-                { x: -10, y: 0 }    side A (front to the right, like BusDriveBy)
-                { x: -10, y: -90 }  front      { x: -10, y: 180 }  side B
-                { x: -90, y: 180 }  roof       { x: -10, y: 90 }   back
-                                                                     (default { x: -12, y: -24 })
-    doorOpen  slide side B's door panels open                                     (default false)
-    sign      text on the front LED sign, drawn in capitals                       (default 'WANDERBUS')
-    size      max bus length in px; the bus scales down with its box               (default 420)
-    ground    soft dark patch on the road under the bus                               (default true)
-
-  Geometry: one scale. --bus-l is the length (80% of the component's width, so a 3/4 view never
-  overflows); width and height are fixed ratios of it (112 / 320 and 136 / 320), the same ratios as
-  the SVG viewBoxes, so the faces meet edge to edge. Faces only touch at their edges and have
-  backface-visibility hidden, so nothing z-fights and the far side never shows through.
-
-  Faces
-    side A    four windows (WanderMascot in window 2), a closed door, wheels as discs
-    side B    the mirror image: windows, the door (opens with doorOpen), wheels
-    front     windscreen with the driver, LED sign, headlights, tyres seen head-on
-    back      rear window with passport-stamp stickers, tail lights
-    roof      hatch off: the 2 x 3 seat grid seen from above, a mascot in each seat, drawn
-              upright for a viewer on side B (the turntable's rooftop pose)
-    base      dark
-
-  Accessibility: purely decorative, aria-hidden. The door slide is a transform transition and is cut
-  short by the global reduced-motion guard.
--->
 <script setup lang="ts">
 import { computed } from 'vue'
 import WanderMascot from '~/components/ui/WanderMascot.vue'

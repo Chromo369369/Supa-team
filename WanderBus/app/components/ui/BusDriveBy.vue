@@ -1,36 +1,3 @@
-<!--
-  BusDriveBy: the bus that carries every state (design.md §3.2, §3.3). A flat SVG side view with a
-  green body, ink windows, the mascot in the second window, a mini LedBoard destination sign, two
-  wheels and a road line. Original WanderBus drawing, no ported source.
-
-  Props
-    mode       parked | arrive | depart | idle-loop | breakdown                      (default parked)
-    label      LED text, shown in capitals                                            (default '')
-    badge      optional LED badge on the left of the sign, e.g. a bus number          (default '')
-    size       sm | md | lg: max width 160 / 360 / 520 px, scales down with its box    (default md)
-    skippable  click, Enter, Space or Escape jumps the current mode to its end state  (default false)
-    delay      ms to wait before the mode starts (stagger buses into bays)            (default 0)
-    mood       override the mascot mood, e.g. 'wave' while parked at the pole         (default auto)
-    mascotColor  mascot body colour                                                   (default var(--wb-green))
-
-  Emits
-    done(mode)  when arrive, depart or breakdown finish (or are skipped). parked and idle-loop
-                never emit: parked has nothing to play and idle-loop runs until the mode changes.
-
-  Exposes `play()` (replay the current mode) and `skip()` through a template ref. A parent can also
-  replay by changing `:key`.
-
-  Timings (§3.2)
-    arrive     drive in from -120% to centre, 900 ms --ease; 120 ms squash; doors open --t-ui (1270 ms)
-    depart     doors close --t-ui, then drive from centre to +120%, 700 ms --ease      (950 ms)
-    idle-loop  wheels roll, road dashes scroll, body bobs 2 px over --t-signature    (loops)
-    breakdown  3° tilt with a wobble, puff of smoke scales and fades, mascot sad      (900 ms)
-
-  Accessibility: the drawing is decorative. Without `skippable` the whole thing is aria-hidden and
-  has no tab stop. With it, the root is a button named "Skip the bus animation" with a visible focus
-  ring. It never announces state itself; parents do that. Under reduced motion the end state shows at
-  once and `done` fires on the next tick.
--->
 <script lang="ts">
 export type BusMode = 'parked' | 'arrive' | 'depart' | 'idle-loop' | 'breakdown'
 export type BusSize = 'sm' | 'md' | 'lg'

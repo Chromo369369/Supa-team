@@ -1,14 +1,3 @@
-<!--
-  Adventure pill (F1): a dark pill floating bottom centre on every page while a solo adventure runs.
-  Left: the bus number as an LED chip (the LedBoard dot-matrix look; a walker glyph for walking trips).
-  Middle: a pulsing amber dot with "On the bus" / "Walking", then the stop name and the live timer.
-  Right: "Hold to end adventure". Press and hold about a second (pointer, or Enter / Space) and the fill
-  sweeps across; let go early and it cancels. When it completes, AdventureEndDialog opens.
-  Assistive tech: a click that comes without a pointer or key press (event.detail === 0, or no pointerdown
-  before it) opens the dialog straight away. Reduced motion: no sweep, a 3-2-1 count in the label instead.
-  Mounted once in layouts/default.vue, which keeps the landing pill, the phone spin dock and the
-  desktop toasts clear of it (see .has-adventure there).
--->
 <script setup lang="ts">
 import { ledDots, ledTextWidth } from '~/utils/ledFont'
 

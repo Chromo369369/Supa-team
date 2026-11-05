@@ -1,25 +1,3 @@
-// Shop rewards: what you own, which look is on in each slot, and your vouchers
-// (supabase/shop.sql + supabase/rewards.sql). Cached app-wide with useState, so the header, the bus
-// pass, the shop, the stamps and the tickets share one copy.
-//
-//   const rewards = useRewards()
-//   owned          slugs you've bought (not cards), e.g. ['perk-ticket-sunset', 'voucher-yakun']
-//   equipped       slot -> slug of the look that's on, e.g. { ticket_theme: 'perk-ticket-sunset' }
-//   isOn(slug)     true when that look is equipped (templates call this for themes and the hat)
-//   equip(item)    put a look on (it replaces whatever was in its slot); item = a shop_items row
-//   unequip(slot)  take the look in that slot off
-//   vouchers       your voucher redemptions, newest first:
-//                  { id, item_id, slug, name, brand, description, code, expiresAt, usedAt, createdAt }
-//   markUsed(id)   mark a voucher redemption as used (the database stamps the time)
-//   load()         fetch again, e.g. right after a redeem
-//   lookFor(ids)   batch-fetch other people's equipped looks (cached); resolves to
-//                  { [userId]: { mascot_hat?: slug, ... } }. hatOf(id) reads the cache for a mascot.
-//   status         'idle' | 'loading' | 'ready' | 'error'
-//
-// The first call on the client loads by itself, and it reloads when you sign in or out.
-// Every failure degrades quietly: until supabase/rewards.sql has run there is no user_equipped
-// table, so isOn() falls back to false (default look) until equipping can be read.
-
 export type LookSlot = 'ticket_theme' | 'stamp_theme' | 'mascot_hat' | 'pass_skin'
 
 export interface Voucher {

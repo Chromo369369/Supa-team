@@ -31,9 +31,7 @@ const { active: adventureActive } = useAdventure()
 </template>
 
 <style>
-/* While an adventure runs, the AdventureBar pill (64px) floats 16px above the bottom edge of every page.
-   It floats over the content, so the page itself is not padded. Lift what else lives at the bottom edge
-   clear of it: the landing "Bus cursor" pill, the phone spin dock on /home and the desktop toast stack. */
+
 .app-layout.has-adventure {
   --adventure-pill-h: 64px;
   --adventure-clear: calc(var(--adventure-pill-h) + var(--sp-4) + env(safe-area-inset-bottom, 0px));

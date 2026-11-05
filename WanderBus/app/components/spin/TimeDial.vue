@@ -1,14 +1,3 @@
-<!--
-  Time dial: a round "how long do you have?" picker, drawn by hand in SVG (no library, nothing from 21st).
-  The real control is a visually hidden native <input type="range">, so the role (slider), the value,
-  min/max, keyboard (arrows, Home, End), form disabling and screen-reader output all come from the browser.
-  The dial is its picture: drag anywhere on the ring (pointer capture), or tap a spot to jump there.
-  PageUp / PageDown move 3 steps, since browsers disagree on how far they go on a native range.
-  The outer ring shows the same travel-time bands as TicketBelt: Short ≤ 20 (green), Medium 21–40 (amber),
-  Long > 40 (ink). The arc and thumb take the colour of the band the value is in.
-
-  Props: modelValue (minutes), min, max, step, id (goes on the input, so a <label for> works), describedby.
--->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { bandFor, type Band } from '~/components/spin/TicketBelt.vue'

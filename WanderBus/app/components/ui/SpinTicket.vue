@@ -1,21 +1,3 @@
-<!--
-  SpinTicket: a mystery trip shown as a bus ticket. Drag the stub to tear it off (or focus it and
-  press Enter) to reveal the bus, boarding stop and destination.
-
-  `compact`: a small, already-torn ticket strip (bus, board at, get off at, ride) for the passport
-  memory card. Not interactive: no stub, no tilt, no focus stop, no reset button. Reads at ~260px.
-
-  `band`: the travel-time band from the belt (TicketBelt's bandFor), so the torn ticket keeps the
-  colour it rode in on. short = green stub with white text (5.39:1), medium = amber stub with ink
-  text (8.45:1), long = ink stub with white text (17.1:1). The default is short (green).
-
-  Sunset theme: with the shop perk perk-ticket-sunset switched on (useRewards), the root gets
-  .theme-sunset and the paper turns apricot with warm ink text (--wb-sunset-*). The band stub
-  keeps its travel-time colour.
-
-  Horizontal tickets are drawn at the container's own width (from 280px up to 580px), so the right
-  edge meets its container's edge.
--->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import TearTicket from '~/components/ui/TearTicket.vue'

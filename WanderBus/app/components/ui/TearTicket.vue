@@ -1,22 +1,3 @@
-<!--
-  TearTicket: a ticket whose perforated stub tears off by hand, fibre by fibre, and drops away.
-
-  Ported to Vue 3 (no animation library) from "Tear Ticket" by David Haz, React Bits:
-  https://reactbits.dev/micro/tear-ticket. Copyright (c) 2026 David Haz, MIT + Commons Clause licence.
-  Used as part of this application only, as the licence allows. Changes for WanderBus: Vue port,
-  CSS-transition tilt instead of motion springs, no image layer, `width` follows the container,
-  perforation drawn as a CSS mask (inline SVG: half-circle notches on both edges plus a row of
-  4px holes), flat paper with an ink outline, and lift + 1.02 scale only while the stub floats
-  (design.md §3.4). Hit-testing uses an invisible SVG path, because masks don't clip pointer events.
-
-  Accessibility: the stub is a real focusable button; Enter or Space tears it instantly, and
-  reduced-motion users get an instant tear after a short drag. The focus ring is drawn outside the
-  stub's clip path (3px --wb-green, 4px out). The pointer-follow tilt is off after the tear and
-  under reduced motion.
-
-  Sunset theme: the root carries .theme-sunset when the perk-ticket-sunset perk is on (useRewards),
-  and the body paper (plus its torn fibres) takes --wb-sunset-face instead of `background`.
--->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
@@ -57,7 +38,6 @@ const emit = defineEmits(['tear'])
 const GRAVITY = 2400
 const RETRACT = 0.17
 
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 const rad = (deg) => (deg * Math.PI) / 180
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a))
 const f = (n) => n.toFixed(2)

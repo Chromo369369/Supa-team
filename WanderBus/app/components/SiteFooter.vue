@@ -10,6 +10,15 @@ async function check_session(){
   }
 }
 onMounted(()=>{check_session()})
+const route = useRoute()
+// already on the landing page: scroll back up instead of a no-op navigation
+function onAbout(e){
+  if(route.path !== '/') return
+  e.preventDefault()
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' })
+  document.getElementById('main')?.focus({ preventScroll: true })
+}
 async function logout(){
   await $supabase.auth.signOut()
   await navigateTo('/',{replace: true})
@@ -41,8 +50,10 @@ onUnmounted(() =>
                         <div class="col-6">
                             <p class="footer-head">Explore</p>
                             <ul class="footer-links">
-                                <li><NuxtLink to="/">About</NuxtLink></li>
-                                <li><NuxtLink to="/home">Home</NuxtLink></li>
+                                <li><NuxtLink to="/" @click="onAbout">About</NuxtLink></li>
+                                <li><NuxtLink :to="valid_session ? '/home' : '/login'">Home</NuxtLink></li>
+                                <li><NuxtLink :to="valid_session ? '/group' : '/login'">Group</NuxtLink></li>
+                                <li><NuxtLink :to="valid_session ? '/passport' : '/login'">Passport</NuxtLink></li>
                             </ul>
                         </div>
 

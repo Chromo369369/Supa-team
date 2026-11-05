@@ -1,27 +1,3 @@
-<!--
-  WanderMascot: the guide on the bus (design.md §3.1). One inline SVG: an orb body, two capsule
-  eyes, a small mouth and two nub arms.
-
-  Props
-    mood    idle | loading | happy | sad | sleepy | wave | peek | cover-eyes   (default idle)
-    color   any CSS colour or token, e.g. 'var(--wb-amber)' or userColor(id)   (default var(--wb-green))
-    size    px; 24 header, 32 toasts, 48 avatars, 96–160 empty states          (default 48)
-    gaze    eyes follow the pointer (or `target`) by up to 3px                 (default false)
-    target  { x, y } in client coords to look at instead of the pointer; reactive, so a parent
-            can feed it every frame (HeroChase). null = use the pointer.
-    label   if set the mascot is announced (role="img"); otherwise aria-hidden.
-    hat     'captain' | null: a small captain's cap (the shop perk perk-mascot-captain). Drawn
-            inside the rig, so it hops, bobs and droops with the mascot.             (default null)
-
-  Exposes `blink()` through a template ref.
-
-  Behaviour
-  - idle and peek blink every 4–6 s at random.
-  - With gaze on and the pointer still for 10 s, an idle mascot falls asleep; the next move wakes
-    it with a startled blink.
-  - Gaze is off under prefers-reduced-motion and, unless a `target` is given, on coarse pointers.
-    Reduced motion also stops the random blinks; the global CSS guard ends every keyframe at once.
--->
 <script lang="ts">
 export type MascotMood = 'idle' | 'loading' | 'happy' | 'sad' | 'sleepy' | 'wave' | 'peek' | 'cover-eyes'
 </script>

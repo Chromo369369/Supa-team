@@ -1,23 +1,3 @@
-<!--
-  LandingSteps: the "How it works" section (design.md §4.1, §5 "Scroll route line"). The four steps
-  are stops on a thick green route line that fills as you scroll, and the WanderBus bus rides the
-  line at the fill's leading edge. Each stop's sign lights up once the fill reaches it.
-
-  Scroll: same idiom as BusTurntable. An IntersectionObserver arms a passive scroll listener only
-  while the route is on screen; the listener is throttled with requestAnimationFrame. Progress is
-  where a reading line (55% down the viewport) sits between the first and the last stop. The fill
-  is one element scaled with transform: scaleY() from its top, and the bus moves with translate3d.
-  The bus leads the fill by half a marker, so it never covers a sign and parks just below the last
-  one. A ResizeObserver re-measures the stop positions; nothing is measured on scroll beyond one
-  getBoundingClientRect of the list.
-
-  Without the script: the line is drawn full (one green segment per gap between stops, pure CSS)
-  and every stop is lit. The bus and the scaled fill only render once mounted.
-  Under reduced motion: line full, every stop lit, bus parked at the last stop, no scroll listener.
-
-  Layout: desktop puts the line down the centre with the steps alternating left and right; phones
-  (≤ 767px) run the line down the left edge with every step to its right.
--->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMotionPrefs } from '~/composables/usePointer'
@@ -51,7 +31,6 @@ const lineX = ref(0)
 /** half a stop marker: the bus runs just ahead of the fill, below the sign it last passed */
 const lead = ref(0)
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 const first = computed(() => stops.value[0] ?? 0)
 const span = computed(() => Math.max(0, (stops.value[stops.value.length - 1] ?? 0) - first.value))

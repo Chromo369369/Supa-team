@@ -1,25 +1,3 @@
-<!--
-  HeroChase: the idle lane bus in the landing hero (design.md §4.1, plan Tier 1.5 "cursor bus",
-  round 2). The mini bus runs back and forth in the hero's lane with the mascot lagging behind it,
-  looking at it and leaving footprints that fade over 1.2 s. Original WanderBus drawing.
-
-  Place it as the last child of a `position: relative` hero; it fills it with `inset: 0`. The lane
-  is the hero element marked `data-chase-lane` (LandingHero: the free space beside "How it works",
-  below the CTAs). Bus, mascot and footprints all stay in that lane; without one nothing is drawn.
-
-  The cursor bus lives in LandingCursor (page wide). Both read the shared state from
-  `BUS_CURSOR_KEY` (provided by pages/index.vue):
-  - `active` true: the cursor bus is on screen, so this layer hides and its loop stops. When it
-    turns false again, the lane bus jumps straight back into the lane (no drive across the text).
-    Only one bus is ever visible.
-  - `enabled` false (the corner pill is off): the lane bus stays parked, stopped.
-  - `lane.locate()` reports where the lane mascot stands, so the cursor mascot can start from
-    there when the cursor bus takes over.
-  Reduced motion: the bus sits still at the right end of the lane.
-
-  One requestAnimationFrame loop, stopped while hidden, parked, scrolled out of view or the tab is
-  hidden. The layer is aria-hidden and pointer-events: none. Footprints come from a pool of 12 dots.
--->
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WanderMascot from '~/components/ui/WanderMascot.vue'
@@ -81,7 +59,6 @@ interface Area {
   mx1: number
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 function bounds() {
   return root.value?.getBoundingClientRect() ?? null

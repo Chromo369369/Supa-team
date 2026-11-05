@@ -1,30 +1,3 @@
-<!--
-  ShopPanel: the reward shop on the profile (supabase/shop.sql + supabase/rewards.sql). Your credit
-  balance, the items for sale in three groups, your voucher wallet and what you've claimed so far.
-
-  Groups
-    Cards      collectable cards; once owned the row says "Owned".
-    Looks      perks, each with its slot ("Ticket theme", "Stamp theme", "Mascot hat", "Bus pass").
-               Once owned: "Owned" plus an Equip / Equipped toggle (aria-pressed). One look per slot,
-               so equipping one replaces the other look in that slot, and the row says so beforehand.
-    Vouchers   the brand as plain text (no logos), the offer and "Limited stock". A claim that comes
-               back "Sold out" marks the row sold out.
-
-  Claim asks first through the shared confirm dialog ("Spend 250 credits on Night Owl Bus card?"),
-  then redeem() runs with the button busy. The database checks the price, ownership and stock, so
-  an error ("You already own this", "Sold out", "Not enough credits…") comes back as an error toast.
-
-  Your vouchers (useRewards().vouchers): each one shows the brand, the offer, the code large with a
-  Copy button, "Valid until 5 Dec 2026" and "Mark as used" (confirm first). Used and expired
-  vouchers are greyed and lose the buttons. No QR code (no QR library in the app).
-
-  Emits
-    redeemed   { credits, item } after a successful claim (credits = the new balance), so the
-               page can update its bus pass and reload the card collection
-
-  States (design.md §3.3): loading keeps the layout with flat placeholder rows, a failed load says
-  what failed with a Retry, and an empty shop, wallet or history gets one sentence.
--->
 <script setup>
 import WanderMascot from '~/components/ui/WanderMascot.vue'
 import ConfettiBurst from '~/components/ui/ConfettiBurst.vue'

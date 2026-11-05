@@ -1,6 +1,6 @@
 // Labels and Bootstrap Icons (design.md §2.6) for the spin categories in shared/utils/categories.ts
 // (filter chips, nearby places). Render as <i :class="['bi', categoryInfo(c).icon]" aria-hidden="true"></i>.
-export const CATEGORY_INFO = {
+const CATEGORY_INFO = {
     cafe:   { label: 'Cafés',   icon: 'bi-cup-hot' },
     food:   { label: 'Food',    icon: 'bi-egg-fried' },
     park:   { label: 'Parks',   icon: 'bi-tree' },

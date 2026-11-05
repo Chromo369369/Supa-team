@@ -1,33 +1,3 @@
-<!--
-  SeatMap: the crew lobby seen from above, like the top deck of a bus (design.md §4.6).
-  A 2 × 3 grid of seats sits inside a flat bus-outline SVG, with the LED sign `CREW <code>` above
-  the windscreen. The driver sits front-right, as on Singapore's right-hand-drive buses, and the
-  host sits right behind them under a crown; members fill the other seats in join order as mascots
-  in their own colour; empty seats are dashed and read "Free seat". The list order (and so what a
-  screen reader hears) stays Seat 1 host, Seat 2, 3…; only the grid placement moves the host.
-
-  UI only: no Realtime. The one read is each rider's best badge (useBadges, batched and cached),
-  shown as a small mark on their mascot with its name in the seat's label and a tooltip.
-
-  Props
-    members        crew members other than the host: [{ user_id, display_name }]
-    hostName       the host's display name
-    isHost         the viewer is the host (their seat is marked "You")
-    code           the crew code, shown on the LED sign
-    capacity       number of seats, host included                      (default 6)
-    currentUserId  the viewer's user_id, to mark their seat "You"      (optional)
-    hostId         the host's user_id, for the host's badge              (optional)
-    compact        smaller seats and mascots, so six seats fit on one screen   (default false)
-    showSign       draw the LED sign on top of the bus, as wide as its body   (default true)
-                   Pass false when the parent draws the sign itself.
-
-  Slots
-    sign-action    sits beside the LED sign, e.g. a "Copy code" button (the sign then shares the row)
-
-  Accessibility: the seats are a real list. Each seat reads as one line ("Seat 1, Alex, host",
-  "Seat 4, free seat"); the bus drawing and the mascots are decorative. Members pop into their
-  seat with a small spring, skipped under prefers-reduced-motion.
--->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import LedBoard from '~/components/ui/LedBoard.vue'
