@@ -7,6 +7,19 @@ import { filterByAmens } from '~/composables/filterAmens';
 const { $supabase } = useNuxtApp()
 const toast = useToast()
 
+async function trackSoloEvent(eventType) {
+  const { error } = await $supabase
+    .from('analytics_events')
+    .insert({
+      event_type: eventType,
+      trip_type: 'solo'
+    })
+
+  if (error) {
+    console.error('Solo analytics tracking failed:', error.message)
+  }
+}
+
 definePageMeta({ middleware: 'auth' })
 
 onMounted(async() =>{
@@ -146,10 +159,11 @@ async function update(){
         possibleStops.value = filterBusStops(arrivals, travelTime.value, allRoutes.data.value, starts)
         possibleStops.value = filterByAmens(preferences.value, possibleStops.value, amenStops.data.value)
         ticketOptions.value = pickTickets(possibleStops.value)
-        
+
         soloSpin.value = buildSoloSpin()
 
         await soloSave()
+        await trackSoloEvent('spin')
 
 
     } catch (e) {
@@ -177,6 +191,7 @@ async function saveTrip(){
                 return
             }
             savedTrip.value = true
+            await trackSoloEvent('passport_entry')
             toast.success('Saved to your passport')
 
 
