@@ -211,7 +211,7 @@ async function joinGroup() {
 
     const { data: group, error } = await $supabase
       .from('groups')
-      .select('group_code')
+      .select('group_code, host_id')
       .eq('group_code', code)
       .maybeSingle()
 

@@ -74,6 +74,13 @@ interface Seat {
   empty: boolean
   label: string
 }
+const rewards = useRewards()
+// fetch everyone's looks whenever someone joins or leaves
+watch(
+  () => [props.hostId, ...props.members.map(m => m.user_id)],
+  ids => rewards.lookFor(ids),
+  { immediate: true }
+)
 
 const FALLBACK_NAME = 'Rider'
 const seatCount = computed(() => Math.max(1, Math.floor(props.capacity)))
@@ -227,7 +234,7 @@ onBeforeUnmount(stopCheer)
               aria-hidden="true"
             >
               <span class="seat__rider">
-                <WanderMascot :size="mascotSize" :color="seat.color" :gaze="false" :mood="cheerMoods[index] ?? 'idle'" />
+                <WanderMascot :size="mascotSize" :color="seat.color" :gaze="false" :mood="cheerMoods[index] ?? 'idle'" :hat="rewards.hatOf(seat.userId)"  />
                 <span v-if="seat.host" class="seat__crown">
                   <i class="bi bi-award-fill" aria-hidden="true"></i>
                 </span>
