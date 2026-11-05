@@ -15,7 +15,6 @@ const { reducedMotion, canTrack } = useMotionPrefs()
 const rewards = useRewards()
 const gold = computed(() => rewards.isOn('perk-stamp-gold'))
 
-const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
 const lerp = (a, b, t) => a * (1 - t) + b * t
 
 /** Small deterministic PRNG (from the disc source), so a stamp looks the same on every render. */
@@ -538,8 +537,7 @@ const aroundStops = computed(() => {
 const aroundOpen = ref(false)   // the "which stop?" menu when an old name matches several stops
 watch(() => active.value?.id, () => { aroundOpen.value = false })
 const dateOf = (t) => (t?.entry_time ? new Date(t.entry_time) : null)
-const formatDate = (t) =>
-  dateOf(t)?.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) ?? ''
+const formatDate = (t) => formatSgDate(dateOf(t))
 const formatTime = (t) =>
   dateOf(t)?.toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }) ?? ''
 const formatDuration = (mins) => {

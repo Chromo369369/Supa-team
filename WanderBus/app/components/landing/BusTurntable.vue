@@ -29,7 +29,6 @@ const phone = ref(false)
 const pos = ref(0)
 const progress = ref(0)
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 const smooth = (v: number) => v * v * (3 - 2 * v)
 
 const rotation = computed<Pose>(() => {

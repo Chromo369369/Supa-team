@@ -1,77 +1,34 @@
+# WanderBus
 
-
-# Nuxt Minimal Starter
-
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+Nuxt 4 + Vue 3 + Supabase. Spin for a random bus stop, explore it, and log the trip in your passport.
 
 ## Setup
 
-Make sure to install dependencies:
-
 ```bash
-# npm
-npm install
-
-# pnpm
 pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
+pnpm dev        # http://localhost:3000
 ```
 
-## Development Server
+Create `WanderBus/.env` (never commit it) with:
 
-Start the development server on `http://localhost:3000`:
-
-```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
+```
+NUXT_PUBLIC_SUPABASE_URL=
+NUXT_PUBLIC_SUPABASE_KEY=
+NUXT_ONEMAP_TOKEN=
+NUXT_LTA_ACCOUNT_KEY=
 ```
 
-## Production
+## Database
 
-Build the application for production:
+The SQL files in `supabase/` are gitignored. Run them by hand in the Supabase SQL editor, in this order:
+
+`fix_stop_activities` → `stop_activities` → `profile` → `cards` → `shop` → `passport_stop_code` → `rewards`
+
+`passport.sql` is optional.
+
+## Build
 
 ```bash
-# npm
-npm run build
-
-# pnpm
 pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
 pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
 ```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.

@@ -23,7 +23,7 @@
         }
         if(data.session){
             // replay the BoardingIntro on home after every login (it normally plays once per tab)
-            try { sessionStorage.removeItem('wb-intro-seen') } catch {}
+            try { sessionStorage.removeItem('wb-intro-seen') } catch { /* storage blocked: the intro just won't replay */ }
             await navigateTo('/home',{replace:true})
         }
 }

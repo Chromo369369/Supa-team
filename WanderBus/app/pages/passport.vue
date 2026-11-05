@@ -315,14 +315,7 @@ const removeTrip = async (id) => {
 }
 
 // ---------- Display helpers ----------
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  return new Date(dateString).toLocaleDateString('en-SG', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
+const formatDate = formatSgDate
 
 // NEW
 const formatTime = (iso) =>

@@ -5,8 +5,8 @@
 // so its photos are stored in exactly the format the passport page already shows.
 // passport.vue keeps its own copy and is left unchanged.
 
-export const PHOTO_MAX_SIDE = 1280
-export const PHOTO_JPEG_QUALITY = 0.8
+const PHOTO_MAX_SIDE = 1280
+const PHOTO_JPEG_QUALITY = 0.8
 export const PHOTO_MAX_FILE_MB = 20
 
 export const compressImage = (file: File): Promise<string> =>
