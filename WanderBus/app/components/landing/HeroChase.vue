@@ -59,6 +59,7 @@ interface Area {
   mx1: number
 }
 
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 function bounds() {
   return root.value?.getBoundingClientRect() ?? null

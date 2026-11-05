@@ -1,5 +1,7 @@
 <template>
   <div class="passport-page">
+    <div class="row justify-content-center g-0">
+      <div class="col-lg-8 col-md-10">
         <header class="passport-head">
           <h1 class="passport-title">Your passport</h1>
           <div class="passport-meta">
@@ -13,8 +15,6 @@
           </div>
         </header>
 
-    <div class="row justify-content-center g-0">
-      <div class="col-lg-8 col-md-10">
         <div class="d-flex flex-column gap-4">
 
           <!-- Loading state (a reload after save/delete keeps the carousel on screen) -->
@@ -437,6 +437,7 @@ const clearPhoto = () => {
   gap: var(--sp-3);
   max-width: 1280px;
   margin: 0 auto var(--sp-5);
+  margin-bottom: var(--sp-5);
 }
 .passport-title {
   margin: 0;

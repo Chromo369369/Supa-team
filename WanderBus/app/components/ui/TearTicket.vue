@@ -38,6 +38,7 @@ const emit = defineEmits(['tear'])
 const GRAVITY = 2400
 const RETRACT = 0.17
 
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 const rad = (deg) => (deg * Math.PI) / 180
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a))
 const f = (n) => n.toFixed(2)

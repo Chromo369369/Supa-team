@@ -20,8 +20,8 @@ const GLYPHS = {
   '(': [2, 4, 8, 8, 8, 4, 2], ')': [8, 4, 2, 2, 2, 4, 8],
 }
 
-const LED_GLYPH_WIDTH = 5
-const LED_GLYPH_HEIGHT = 7
+export const LED_GLYPH_WIDTH = 5
+export const LED_GLYPH_HEIGHT = 7
 
 /** Width in dot columns of a line of text (1 blank column between letters). */
 export function ledTextWidth(text) {

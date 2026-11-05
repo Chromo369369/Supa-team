@@ -1,6 +1,6 @@
 <!--
   End adventure dialog (F1). Mounted once in layouts/default.vue, opened through useAdventure().endPrompt
-  (by AdventureBar's hold-to-end). Native <dialog>: focus stays inside, Esc keeps exploring,
+  (by AdventureBar or SpinResults' End adventure). Native <dialog>: focus stays inside, Esc keeps exploring,
   and focus goes back to the button that opened it (or to <main> when that button is gone after End).
   Shows the trip like a passport stamp, with optional notes and a photo (shrunk by utils/compressImage), then Save to passport / End without saving /
   Keep exploring. A trip already saved from the ticket says so instead of offering a second save.

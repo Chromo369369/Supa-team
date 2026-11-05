@@ -38,6 +38,71 @@ const submitted= ref(false)
 const response = await useFetch('/api/allBusStops')
 const sharedSpin = ref(null)
 
+async function shareSpin(){
+  if (!result.value){
+    return
+  }
+  
+  const spinData = {
+    chosenStop: result.value.chosenStop,
+    stopDetails: result.value.stopDetails,
+    startDetails: result.value.startDetails,
+    startingStops: result.value.startingStops,
+    preferences: preferences.value,
+    startingAddress: selectedPlace.value.ADDRESS
+  }
+  sharedSpin.value = spinData
+  const {data,error} = await $supabase.from('groups').update( {current_spin: spinData}).eq('group_code', props.group.group_code).select()
+  if (error || !data?.length){alert('could not share spin', error)}
+  await $supabase.from('group_spin_options').upsert({
+    group_code: props.group.group_code,
+    possible_stops: result.value.possibleStops
+  })
+}
+async function saveTrip(){
+        try{
+            const {data, error} = await $supabase.from('passport_entries').insert({
+                starting_stop: sharedSpin.value.startDetails.Description,
+                end_stop: sharedSpin.value.stopDetails.Description,
+                time_taken: Math.ceil(sharedSpin.value.chosenStop.chosen.totalTime),
+                bus_taken: sharedSpin.value.chosenStop.chosen.bus,
+                starting_location: sharedSpin.value.startingAddress
+            })
+            if(error){
+                alert(`Could not save your trip: ${error.message}`)
+                return
+            }
+            toast.success('Saved to your passport')
+            
+                
+        }catch(e){
+            console.log(e)
+        }
+    }
+
+async function respin2(){
+  let possibleStops = result?.value.possibleStops
+  if (!possibleStops){
+    const { data } = await $supabase.from('group_spin_options').select('possible_stops').eq('group_code',props.group.group_code).maybeSingle()
+    possibleStops = data?.possibleStops
+  }
+  result.value = {...result.value,...reroll(response.data.value,result.value.possibleStops)
+  
+  }
+  if (!possibleStops){
+    ready.value=true
+  }
+  await shareSpin()
+}
+
+async function spin2(){
+  submitted.value=true
+  result.value = null
+  result.value = await spin(preferences.value,selectedPlace.value,travelTime.value,submitted.value)
+  await shareSpin()
+}
+
+const hostLeft = ref(null)
 
 async function trackEvent(eventType) {
   const { error } = await $supabase
@@ -131,7 +196,7 @@ async function spin2(){
   await trackEvent('spin')
 }
 
-const hostLeft = ref(null)
+
 
 onMounted(async () => {
   try {

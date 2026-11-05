@@ -15,6 +15,7 @@ const { reducedMotion, canTrack } = useMotionPrefs()
 const rewards = useRewards()
 const gold = computed(() => rewards.isOn('perk-stamp-gold'))
 
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
 const lerp = (a, b, t) => a * (1 - t) + b * t
 
 /** Small deterministic PRNG (from the disc source), so a stamp looks the same on every render. */
@@ -116,11 +117,13 @@ const mounted = ref(false)
 /* ── phases: scatter → cascade (lined) → zoom ── */
 const lined = ref(false)        // latched once the morph completes, or by "Line them up"
 const zoomed = ref(false)       // the chosen stamp is zoomed and its details are open
+const scrollMorph = ref(0)      // 0..1 from the page scroll through the pinned stage
 const morph = ref(0)            // the smoothed value every pose lerps by
 const springing = ref(false)
 
 const canScatter = computed(() => mounted.value && !reducedMotion.value && n.value > 1)
-const morphTarget = computed(() => (canScatter.value && !lined.value ? 0 : 1))
+const scrollMorphOn = computed(() => canScatter.value && !lined.value)
+const morphTarget = computed(() => (scrollMorphOn.value ? scrollMorph.value : 1))
 const phase = computed(() => (morph.value < 0.985 ? 'scatter' : zoomed.value ? 'zoom' : 'cascade'))
 const showDetails = computed(() => phase.value === 'zoom' && !!active.value)
 
@@ -158,62 +161,58 @@ function kick() {
 }
 watch(morphTarget, kick)
 
-/* Line up or scatter; the spring on morphTarget animates the change. */
-function setLined(v) {
+/* Line up or scatter, keeping the stage where it is on screen while the scroll track changes. */
+async function setLined(v) {
   if (lined.value === v) return
+  const before = stage.value?.getBoundingClientRect().top
   lined.value = v
-  if (!v) zoomed.value = false
+  if (!v) {
+    zoomed.value = false
+    scrollMorph.value = 0
+  }
+  await nextTick()
+  const el = stage.value
+  if (!el || before == null) return
+  if (v) {
+    const after = el.getBoundingClientRect().top
+    if (Math.abs(after - before) > 1) window.scrollBy({ top: after - before, behavior: 'instant' })
+  } else {
+    // Back to the top of the track, so the scroll morph starts again from the wall.
+    const stick = parseFloat(getComputedStyle(el).top) || 0
+    const top = track.value?.getBoundingClientRect().top ?? 0
+    if (top < stick - 1) window.scrollBy({ top: top - stick, behavior: 'instant' })
+    readScroll()
+  }
 }
 const toggleLined = () => setLined(!lined.value)
 
-/* ── mouse wheel: scatter ⇄ line ⇄ trip by trip, while the stage is in view ── */
-const WHEEL_STEP = 60       // px of wheel travel per step
-const WHEEL_LOCK = 350      // ms after a step that further wheel events are eaten (trackpad momentum)
-let wheelAcc = 0
-let wheelLockUntil = 0
-function onWheel(e) {
-  if (e.ctrlKey) return
-  const t = e.target
-  if (t instanceof Element && t.closest('input, textarea, select, .sc-details')) return
-  // Only capture while the stage is (nearly) fully on screen; otherwise the page scrolls normally.
-  const el = stage.value
-  if (!el) return
-  const r = el.getBoundingClientRect()
-  const seen = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0)
-  if (r.height <= 0 || seen / r.height < 0.9) {
-    wheelAcc = 0
-    return
-  }
-  if (performance.now() < wheelLockUntil) {
-    e.preventDefault()
-    return
-  }
-  let delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX
-  if (e.deltaMode === 1) delta *= 16
-  else if (e.deltaMode === 2) delta *= window.innerHeight
-  if (!delta) return
-  if (Math.sign(delta) !== Math.sign(wheelAcc)) wheelAcc = 0
-  wheelAcc += delta
-  const forward = wheelAcc > 0
-  const inScatter = !lined.value && canScatter.value
-  // Whether this direction has a step to take here; if not, release to the page.
-  const canStep = forward
-    ? inScatter || index.value < n.value - 1
-    : lined.value && (index.value > 0 || canScatter.value)
-  if (!canStep) {
-    wheelAcc = 0
-    return
-  }
-  e.preventDefault()
-  if (Math.abs(wheelAcc) < WHEEL_STEP) return
-  if (forward) {
-    if (inScatter) setLined(true)
-    else next()
-  } else if (index.value > 0) prev()
-  else setLined(false)
-  wheelAcc = 0
-  wheelLockUntil = performance.now() + WHEEL_LOCK
+/* ── scroll progress through the pinned stage ── */
+let scrollFrame = 0
+function readScroll() {
+  scrollFrame = 0
+  if (!scrollMorphOn.value || !track.value || !stage.value) return
+  const travel = track.value.offsetHeight - stage.value.offsetHeight
+  if (travel <= 0) return
+  const stick = parseFloat(getComputedStyle(stage.value).top) || 0
+  const p = clamp((stick - track.value.getBoundingClientRect().top) / travel, 0, 1)
+  const t = clamp(p / 0.85, 0, 1)
+  scrollMorph.value = t * t * (3 - 2 * t)
+  if (p >= 0.999) setLined(true)
 }
+function onScroll() {
+  if (!scrollFrame) scrollFrame = requestAnimationFrame(readScroll)
+}
+watch(scrollMorphOn, (on) => {
+  if (typeof window === 'undefined') return
+  if (on) {
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll, { passive: true })
+    nextTick(readScroll)
+  } else {
+    window.removeEventListener('scroll', onScroll)
+    window.removeEventListener('resize', onScroll)
+  }
+})
 
 /* ── stage size ── */
 const size = reactive({ w: 960, h: 640 })
@@ -240,11 +239,10 @@ onMounted(() => {
     sizeObserver = new ResizeObserver(([e]) => {
       size.w = e.contentRect.width
       size.h = e.contentRect.height
+      onScroll()
     })
     sizeObserver.observe(scene.value)
   }
-  // Non-passive, so the wheel can be captured while the stage is in view.
-  scene.value?.addEventListener('wheel', onWheel, { passive: false })
 })
 watch(reducedMotion, (on) => {
   if (on) {
@@ -254,10 +252,12 @@ watch(reducedMotion, (on) => {
 })
 onBeforeUnmount(() => {
   if (raf) cancelAnimationFrame(raf)
+  if (scrollFrame) cancelAnimationFrame(scrollFrame)
   if (crumpleRaf) cancelAnimationFrame(crumpleRaf)
   sizeObserver?.disconnect()
   noteObserver?.disconnect()
-  scene.value?.removeEventListener('wheel', onWheel)
+  window.removeEventListener('scroll', onScroll)
+  window.removeEventListener('resize', onScroll)
 })
 
 /* ── poses ── */
@@ -537,7 +537,8 @@ const aroundStops = computed(() => {
 const aroundOpen = ref(false)   // the "which stop?" menu when an old name matches several stops
 watch(() => active.value?.id, () => { aroundOpen.value = false })
 const dateOf = (t) => (t?.entry_time ? new Date(t.entry_time) : null)
-const formatDate = (t) => formatSgDate(dateOf(t))
+const formatDate = (t) =>
+  dateOf(t)?.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) ?? ''
 const formatTime = (t) =>
   dateOf(t)?.toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }) ?? ''
 const formatDuration = (mins) => {
@@ -799,7 +800,7 @@ const StampFace = {
       </div>
     </div>
 
-    <div ref="track" class="sc-track">
+    <div ref="track" class="sc-track" :class="{ 'is-scroll-morph': scrollMorphOn }">
       <div
         ref="stage"
         class="sc-stage"
@@ -985,9 +986,12 @@ const StampFace = {
   min-width: 0;
 }
 
-/* ── The stage and its wrapper ── */
+/* ── The pinned stage and its scroll track ── */
 .sc-track {
   position: relative;
+}
+.sc-track.is-scroll-morph {
+  height: calc(var(--sc-h) + 90dvh);
 }
 .sc-stage {
   position: relative;
@@ -998,6 +1002,10 @@ const StampFace = {
   overflow: hidden;
   border-radius: var(--r-card);
   background: var(--wb-surface-2);
+}
+.is-scroll-morph > .sc-stage {
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-2));
 }
 
 .sc-scene {
@@ -1019,14 +1027,10 @@ const StampFace = {
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
-  /* The root sits at z=0, so stamps with negative translateZ fall behind its empty box when
-     hit-testing; let events pass through it and catch them on the stamps (they still bubble to the scene). */
-  pointer-events: none;
 }
 
 /* ── One stamp ── */
 .sc-disc {
-  pointer-events: auto;
   position: absolute;
   left: calc(50% - var(--sc-s) / 2);
   top: calc(50% - var(--sc-s) / 2);

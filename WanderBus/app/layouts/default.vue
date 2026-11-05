@@ -31,7 +31,6 @@ const { active: adventureActive } = useAdventure()
 </template>
 
 <style>
-
 .app-layout.has-adventure {
   --adventure-pill-h: 64px;
   --adventure-clear: calc(var(--adventure-pill-h) + var(--sp-4) + env(safe-area-inset-bottom, 0px));

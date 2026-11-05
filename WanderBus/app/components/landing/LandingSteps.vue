@@ -31,6 +31,7 @@ const lineX = ref(0)
 /** half a stop marker: the bus runs just ahead of the fill, below the sign it last passed */
 const lead = ref(0)
 
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 const first = computed(() => stops.value[0] ?? 0)
 const span = computed(() => Math.max(0, (stops.value[stops.value.length - 1] ?? 0) - first.value))

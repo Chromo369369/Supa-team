@@ -192,26 +192,17 @@ function show(key) {
   color: var(--wb-muted);
 }
 
-/* Each label stays on one line with its number centred under it; the row sizes to its labels
-   and wraps whole counts (never a label) when the pass is narrow */
 .pass-counts {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--sp-4);
   margin: 0;
 }
 
 .count {
-  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--sp-1);
-  text-align: center;
-}
-
-.count .stat-label {
-  white-space: nowrap;
 }
 
 .count-value {
@@ -291,7 +282,6 @@ function show(key) {
     min-height: 128px;
   }
   .pass-counts {
-    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -82,6 +82,10 @@ function makeSim(): Sim {
     return { offset: 0, v: 0, mode: RUN, target: 0, lift: [], vlift: [], z: [], lane: [], raf: 0, last: 0, visible: true, init: false, touched: false, l: 0, center: -1, published: '', px: 0, py: 0, inside: false, lock: false, lockX: 0, lockY: 0 }
 }
 
+function clamp(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value))
+}
+
 /** Position on the stadium loop. u is arc length; the front lane runs right to left, the back lane left to right. */
 function along(g: Geo, u: number): Point {
     const { s, r } = g

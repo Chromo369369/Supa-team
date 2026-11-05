@@ -6,7 +6,7 @@ WanderBus is a web app for people in Singapore who have some free time but don't
 
 | | |
 |---|---|
-| **Live app** | `TODO: https://<your-app>.vercel.app` |
+| **Live app** | https://wanderbus.vercel.app/ |
 | **Git repo** | https://github.com/Chromo369369/Supa-team |
 | **Course** | IS216 Web Application Development II, Group G6 |
 
@@ -43,9 +43,9 @@ WanderBus is a web app for people in Singapore who have some free time but don't
 
 | Role | Email | Password |
 |---|---|---|
-| Regular user | `TODO` | `TODO` |
-| Regular user (for testing groups with two browsers) | `TODO` | `TODO` |
-| Admin (can open `/admin`) | `TODO` | `TODO` |
+| Regular user | `amelia@gmail.com` | `amelia@123` |
+| Regular user (for testing groups with two browsers) | `harry@gmail.com` | `harry@123` |
+| Admin (can open `/admin`) | `jonathan.l.2025@computing.smu.edu.sg` | `test123!` |
 
 You can also register a new account on `/register`.
 
@@ -173,19 +173,9 @@ pnpm preview      # serve the production build locally
 
 ## Database setup (Supabase)
 
-The SQL files are in `WanderBus/supabase/`. Run each one once in the Supabase dashboard (SQL Editor → New query → paste → Run), in this order:
+**No database setup is needed.** The app connects to the team's existing Supabase project, where every table, policy, function and storage bucket is already in place. Running it locally with the `.env` values above uses that same database.
 
-1. `passport.sql`: saved trips (`passport_entries`) and their policies
-2. `passport_stop_code.sql`: adds `end_stop_code`, so a stamp can link to its stop page
-3. `place_photos.sql`: the `place-photos` storage bucket, `place_photos`, `user_rewards` and `pioneered_places`, plus the Pioneer trigger
-4. `fix_stop_activities.sql`: **only** if your database still has the old `challenges` tables
-5. `stop_activities.sql`: signposts, votes, challenges and challenge completions
-6. `profile.sql`: the `profile_stats()` function
-7. `cards.sql`: card catalogue, unlocks and the `card-art` bucket
-8. `shop.sql`: credit rules, shop items, redemptions
-9. `rewards.sql`: perks, vouchers, badges and the welcome bonus
-
-> **TODO (team):** these tables were created by hand in the dashboard and still need SQL files: `groups`, `group_members`, `group_spin_options`, `soloTrip`, `admin_users`, `analytics_events`, and the `status` column on `place_photos`. Until then, a fresh Supabase project won't have them. To make someone an admin, add their user id to `admin_users` in the Table Editor.
+The files in `WanderBus/supabase/` are kept for reference. They show how the main tables, row-level security policies, and the triggers that award Pioneer credits, badges and cards work.
 
 In **Authentication → URL Configuration**, set the Site URL to the deployed URL and add `https://<your-app>.vercel.app/**` to the Redirect URLs.
 

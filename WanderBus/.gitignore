@@ -23,3 +23,10 @@ logs
 .env.*
 !.env.example
 supabase/*.sql
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

@@ -68,6 +68,7 @@ let raf = 0
 let lastTime = 0
 let landing: HTMLElement | null = null
 
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 /* ── storage ── */
 function readPref(): boolean | null {

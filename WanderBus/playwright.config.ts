@@ -1,72 +1,45 @@
-import { defineConfig, devices } from '@playwright/test';
-import { loadEnvFile } from 'node:process';
-import path from 'node:path';
+import 'dotenv/config'
+import { defineConfig, devices } from '@playwright/test'
 
-try {
-  loadEnvFile();
-} catch {
-  // CI and shell-provided environment variables do not need a local .env file.
-}
+const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000'
 
-const externallyHostedBaseURL = process.env.E2E_BASE_URL;
-const baseURL = externallyHostedBaseURL ?? 'http://127.0.0.1:3100';
-const hasE2EAccount = Boolean(
-  (process.env.E2E_EMAIL ?? process.env.E2E_TEST_EMAIL) &&
-  (process.env.E2E_PASSWORD ?? process.env.E2E_TEST_PASSWORD),
-);
-const authFile = path.join(process.cwd(), 'playwright', '.auth', 'user.json');
-const emptyAuthState = { cookies: [], origins: [] };
-
-const browserProjects = [
-  { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-  { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-  { name: 'webkit', use: { ...devices['Desktop Safari'] } },
-  {
-    name: 'iPhone SE',
-    grep: /@mobile/,
-    use: { ...devices['iPhone SE'] },
-  },
-].map((project) => ({
-  ...project,
-  dependencies: hasE2EAccount ? ['auth-setup'] : [],
-  use: {
-    ...project.use,
-    baseURL,
-    storageState: hasE2EAccount ? authFile : emptyAuthState,
-  },
-  testIgnore: /auth\.setup\.ts/,
-}));
+// The "unit" project tests plain functions and never opens the app, so it should not start `pnpm dev`.
+// You can also force this with PW_SKIP_SERVER=1 (for example when the app is already running somewhere else).
+const args = process.argv.join(' ')
+const onlyUnit = /--project[= ]unit(\s|$)/.test(args)
+const skipServer = onlyUnit || !!process.env.PW_SKIP_SERVER
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: 1,
-  reporter: [['list'], ['html', { open: 'never' }]],
   timeout: 60_000,
   expect: { timeout: 10_000 },
+  fullyParallel: true,
+  retries: process.env.CI ? 1 : 0,
+  workers: process.env.CI ? 2 : undefined,
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL,
+    baseURL: BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
   },
+  webServer: skipServer
+    ? undefined
+    : {
+        command: 'pnpm dev',
+        url: BASE_URL,
+        reuseExistingServer: true,
+        timeout: 180_000,
+      },
   projects: [
-    ...(hasE2EAccount
-      ? [{
-          name: 'auth-setup',
-          testMatch: /auth\.setup\.ts/,
-          use: { ...devices['Desktop Chrome'], baseURL, storageState: emptyAuthState },
-        }]
-      : []),
-    ...browserProjects,
+    // Pure functions: distance maths, spin filters, category tables. No browser, no server.
+    { name: 'unit', testMatch: /unit\/.*\.spec\.ts/ },
+    // Nuxt server routes called directly over HTTP (some need your LTA / OneMap keys in .env).
+    { name: 'api', testMatch: /api\/.*\.spec\.ts/ },
+    // Pages in a real browser. Supabase and /api calls are mocked, so no real login or database is touched.
+    {
+      name: 'chromium',
+      testMatch: /(public|app)\/.*\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
-  webServer: externallyHostedBaseURL ? undefined : {
-    command: 'pnpm dev --host 127.0.0.1 --port 3100',
-    url: baseURL,
-    reuseExistingServer: false,
-    timeout: 120_000,
-    env: { NUXT_E2E_MOCK_UPSTREAMS: 'true' },
-  },
-});
+})
