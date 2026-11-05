@@ -24,60 +24,85 @@ onUnmounted(() =>
 
 <template>
     <footer class="wb-footer">
-        <div class="container py-5">
-            <div class="row g-4">
+        <div class="container footer-inner">
+            <div class="row gx-4 gy-5">
                 <div class="col-md-6">
-                    <NuxtLink to="/" class="footer-brand">🚌 WanderBus</NuxtLink>
-                    <p class="footer-text mt-2 mb-0">
+                    <NuxtLink to="/" class="footer-brand">
+                        <i class="bi bi-bus-front" aria-hidden="true"></i>
+                        <span>WanderBus</span>
+                    </NuxtLink>
+                    <p class="footer-text mb-0">
                         Take a random bus. Get off somewhere worth it.
                     </p>
                 </div>
 
-                <div class="col-6 col-md-3">
-                    <h6 class="footer-heading">Explore</h6>
-                    <ul class="footer-links">
-                        <li><NuxtLink to="/">Landing</NuxtLink></li>
-                        <li><NuxtLink to="/home">Home</NuxtLink></li>
-                    </ul>
-                </div>
+                <nav class="col-md-6" aria-label="Footer">
+                    <div class="row gx-4 gy-4">
+                        <div class="col-6">
+                            <p class="footer-head">Explore</p>
+                            <ul class="footer-links">
+                                <li><NuxtLink to="/">About</NuxtLink></li>
+                                <li><NuxtLink to="/home">Home</NuxtLink></li>
+                            </ul>
+                        </div>
 
-                <div class="col-6 col-md-3">
-                    <h6 class="footer-heading">Account</h6>
-                    <ul class="footer-links">
-                        <li><NuxtLink to="/login" v-if="!valid_session">Login</NuxtLink></li>
-                        <li><NuxtLink to="/register" v-if="!valid_session">Register</NuxtLink></li>
-                        <li><NuxtLink to ='/' class="header-link" v-if="valid_session" v-on:click="logout()">Logout</NuxtLink></li>
-                    </ul>
-                </div>
+                        <div class="col-6">
+                            <p class="footer-head">Account</p>
+                            <ul class="footer-links">
+                                <li v-if="!valid_session"><NuxtLink to="/login">Log in</NuxtLink></li>
+                                <li v-if="!valid_session"><NuxtLink to="/register">Register</NuxtLink></li>
+                                <li v-if="valid_session"><button type="button" class="footer-button" @click="logout()">Log out</button></li>
+                            </ul>
+                        </div>
+                    </div>
+                </nav>
             </div>
 
-            <div class="footer-bottom mt-4 pt-3">
-                © 2026 WanderBus - WAD2 G6T3
-            </div>
+            <p class="footer-bottom mb-0">
+                © 2026 WanderBus · WAD2 G6T3
+            </p>
         </div>
     </footer>
 </template>
 
 <style scoped>
 .wb-footer {
-  background: #141a33;
-  color: #c9ccd6;
+  background: var(--wb-ink);
+  color: var(--wb-on-ink-2);
 }
 
+.footer-inner {
+  padding-block: var(--sp-8) var(--sp-6);
+  padding-inline: var(--gutter);
+}
+
+/* The designed close: large wordmark in Fredoka */
 .footer-brand {
-  font-size: 1.3rem;
-  font-weight: 800;
-  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--wb-on-ink);
   text-decoration: none;
 }
 
-.footer-text {
-  font-size: 0.9rem;
+.footer-brand:hover {
+  color: var(--wb-on-ink);
 }
 
-.footer-heading {
-  color: #f5a623;
-  font-weight: 700;
+.footer-text {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-lead);
+  color: var(--wb-on-ink-2);
+}
+
+.footer-head {
+  margin: 0 0 var(--sp-1);
+  font-weight: 600;
+  color: var(--wb-on-ink);
 }
 
 .footer-links {
@@ -86,22 +111,37 @@ onUnmounted(() =>
   margin: 0;
 }
 
-.footer-links li {
-  margin-top: 8px;
-}
-
-.footer-links a {
-  color: #c9ccd6;
+/* 44px tall targets */
+.footer-links a,
+.footer-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--wb-on-ink-2);
+  font: inherit;
   text-decoration: none;
+  cursor: pointer;
 }
 
-.footer-links a:hover {
-  color: #fff;
+.footer-links a:hover,
+.footer-button:hover {
+  color: var(--wb-on-ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.footer-links a:focus-visible,
+.footer-button:focus-visible {
+  outline: 3px solid var(--wb-amber);
+  outline-offset: 2px;
 }
 
 .footer-bottom {
-  border-top: 1px solid #2a3150;
-  font-size: 0.8rem;
-  color: #6b7085;
+  margin-top: var(--sp-7);
+  font-size: var(--fs-meta);
+  color: var(--wb-on-ink-2);
 }
 </style>
