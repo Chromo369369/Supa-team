@@ -318,7 +318,7 @@ async function copyCode() {
             <button
               type="button"
               class="btn-wb-primary lobby-button ready-button"
-              :disabled="!isHost || !sharedSpin"
+              :disabled="!isHost && !sharedSpin"
               :hidden="isHost"
               @click="ready=true"
             >
