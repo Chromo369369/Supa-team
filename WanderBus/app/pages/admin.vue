@@ -15,7 +15,8 @@ const reviewingId = ref(null)
 // ANALYTICS
 const analyticsLoading = ref(false)
 const analyticsError = ref('')
-const selectedMonth = ref(new Date().toISOString().slice(0, 7))
+const now = new Date()
+const selectedMonth = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
 
 const analytics = ref({
   spins: 0,
@@ -169,8 +170,8 @@ async function fetchAnalytics() {
 
   try {
     const [year, month] = selectedMonth.value.split('-').map(Number)
-    const start = new Date(Date.UTC(year, month - 1, 1)).toISOString()
-    const end = new Date(Date.UTC(year, month, 1)).toISOString()
+    const start = new Date(year, month - 1, 1).toISOString()
+    const end = new Date(year, month, 1).toISOString()
 
     const { data, error } = await $supabase
       .from('analytics_events')

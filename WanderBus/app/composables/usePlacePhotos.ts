@@ -11,18 +11,10 @@ export const usePlacePhotos = () => {
   const photosByPlace = ref<Record<string, any[]>>({})
   const loadError = ref('')   // set when the photos couldn't be loaded, so the page can show it with a Retry
 
-async function withUrl(row: any) {
-  const { data, error } = await $supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(row.path, 3600)
-
-  if (error) {
-    console.error('Error loading photo:', error.message)
-    return { ...row, url: null }
+  function withUrl(row: any) {
+    const { data } = $supabase.storage.from(BUCKET).getPublicUrl(row.path)
+    return { ...row, url: data.publicUrl }
   }
-
-  return { ...row, url: data.signedUrl }
-}
 
   // every photo inside the box around the walking circle, in one query
   async function loadPhotosNear(stop: { lat: number, lon: number }, radiusM: number) {
@@ -42,10 +34,11 @@ async function withUrl(row: any) {
       loadError.value = error.message
       return
     }
+    const rows = data.map(withUrl)
     const grouped: Record<string, any[]> = {}
-    for (const row of data) {
+    for (const row of rows) {
       if (row.place_id in grouped == false) grouped[row.place_id] = []
-      grouped[row.place_id]!.push(withUrl(row))
+      grouped[row.place_id]!.push(row)
     }
     photosByPlace.value = grouped
   }
@@ -83,6 +76,16 @@ async function withUrl(row: any) {
 
     return { status: 'pending' }
   }
-
-  return { photosByPlace, loadError, loadPhotosNear, uploadPhoto }
+  async function deletePhoto(photo:any){
+    const { data, error } = await $supabase.from('place_photos').delete().eq('id', photo.id).select('id')
+    if (error) throw new Error(error.message)
+    if (!data?.length) throw new Error('You don’t have permission to delete this photo')
+    await $supabase.storage.from(BUCKET).remove([photo.path])
+    photosByPlace.value = {
+      ...photosByPlace.value,
+      [photo.place_id]: (photosByPlace.value[photo.place_id] || []).filter((p: any) => p.id != photo.id)
+    }
+  }
+  return { photosByPlace, loadError, loadPhotosNear, uploadPhoto, deletePhoto }
 }
+

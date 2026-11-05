@@ -62,9 +62,9 @@ async function shareSpin(){
     chosenStop: result.value.chosenStop,
     stopDetails: result.value.stopDetails,
     startDetails: result.value.startDetails,
-    startingStops: result.value.startingStops,
+    startingStops: result.value.startingStops ?? sharedSpin.value?.startingStops,
     preferences: preferences.value,
-    startingAddress: selectedPlace.value.ADDRESS
+    startingAddress: selectedPlace.value.ADDRESS ?? sharedSpin.value?.startingStops
   }
   sharedSpin.value = spinData
   const {data,error} = await $supabase.from('groups').update( {current_spin: spinData}).eq('group_code', props.group.group_code).select()
@@ -102,7 +102,7 @@ async function respin2(){
   let possibleStops = result?.value.possibleStops
   if (!possibleStops){
     const { data } = await $supabase.from('group_spin_options').select('possible_stops').eq('group_code',props.group.group_code).maybeSingle()
-    possibleStops = data?.possibleStops
+    possibleStops = data?.possible_stops
   }
   result.value = {...result.value,...reroll(response.data.value,result.value.possibleStops)
   
@@ -111,6 +111,7 @@ async function respin2(){
     ready.value=true
   }
   await shareSpin()
+  await trackEvent('spin')
 }
 
 async function spin2(){
@@ -122,6 +123,7 @@ async function spin2(){
     travelTime.value,
     submitted.value
   )
+  if (!result.value.errorMessage) await trackEvent('spin')
 
   if (!result.value) return
 
@@ -408,6 +410,7 @@ async function copyCode() {
           :stop-details="result?.stopDetails"
           :start-details="result?.startDetails"
           :starting-stops="result?.startingStops"
+          :is-member="!isHost"
           :preferences="preferences"
           @reroll="respin2()"
           @save-trip="saveTrip()"
@@ -422,6 +425,7 @@ async function copyCode() {
             :start-details="sharedSpin.startDetails"
             :starting-stops="sharedSpin.startingStops"
             :preferences="sharedSpin.preferences"
+            :is-member="!isHost"
             @reroll="respin2()"
             @save-trip="saveTrip()"
           />
