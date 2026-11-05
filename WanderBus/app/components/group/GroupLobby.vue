@@ -37,71 +37,6 @@ const locResponse = await useFetch('/api/onemap', {
 const submitted= ref(false)
 const response = await useFetch('/api/allBusStops')
 const sharedSpin = ref(null)
-
-async function shareSpin(){
-  if (!result.value){
-    return
-  }
-  
-  const spinData = {
-    chosenStop: result.value.chosenStop,
-    stopDetails: result.value.stopDetails,
-    startDetails: result.value.startDetails,
-    startingStops: result.value.startingStops,
-    preferences: preferences.value,
-    startingAddress: selectedPlace.value.ADDRESS
-  }
-  sharedSpin.value = spinData
-  const {data,error} = await $supabase.from('groups').update( {current_spin: spinData}).eq('group_code', props.group.group_code).select()
-  if (error || !data?.length){alert('could not share spin', error)}
-  await $supabase.from('group_spin_options').upsert({
-    group_code: props.group.group_code,
-    possible_stops: result.value.possibleStops
-  })
-}
-async function saveTrip(){
-        try{
-            const {data, error} = await $supabase.from('passport_entries').insert({
-                starting_stop: sharedSpin.value.startDetails.Description,
-                end_stop: sharedSpin.value.stopDetails.Description,
-                time_taken: Math.ceil(sharedSpin.value.chosenStop.chosen.totalTime),
-                bus_taken: sharedSpin.value.chosenStop.chosen.bus,
-                starting_location: sharedSpin.value.startingAddress
-            })
-            if(error){
-                alert(`Could not save your trip: ${error.message}`)
-                return
-            }
-            toast.success('Saved to your passport')
-            
-                
-        }catch(e){
-            console.log(e)
-        }
-    }
-
-async function respin2(){
-  let possibleStops = result?.value.possibleStops
-  if (!possibleStops){
-    const { data } = await $supabase.from('group_spin_options').select('possible_stops').eq('group_code',props.group.group_code).maybeSingle()
-    possibleStops = data?.possibleStops
-  }
-  result.value = {...result.value,...reroll(response.data.value,result.value.possibleStops)
-  
-  }
-  if (!possibleStops){
-    ready.value=true
-  }
-  await shareSpin()
-}
-
-async function spin2(){
-  submitted.value=true
-  result.value = null
-  result.value = await spin(preferences.value,selectedPlace.value,travelTime.value,submitted.value)
-  await shareSpin()
-}
-
 const hostLeft = ref(null)
 
 async function trackEvent(eventType) {
@@ -127,13 +62,17 @@ async function shareSpin(){
     chosenStop: result.value.chosenStop,
     stopDetails: result.value.stopDetails,
     startDetails: result.value.startDetails,
+    // after a page refresh the filters are empty, so a reroll keeps the shared spin's start
     startingStops: result.value.startingStops ?? sharedSpin.value?.startingStops,
     preferences: preferences.value,
-    startingAddress: selectedPlace.value.ADDRESS ?? sharedSpin.value?.startingStops
+    startingAddress: selectedPlace.value?.ADDRESS ?? sharedSpin.value?.startingAddress
   }
   sharedSpin.value = spinData
   const {data,error} = await $supabase.from('groups').update( {current_spin: spinData}).eq('group_code', props.group.group_code).select()
-  if (error || !data?.length){alert('could not share spin', error)}
+  // no rows back means the update was blocked (only the host may change the crew's spin)
+  if (error || !data?.length){
+    toast.error(`Couldn’t share the spin with your crew. ${error?.message ?? 'Only the host can change the crew’s ticket.'}`)
+  }
   await $supabase.from('group_spin_options').upsert({
     group_code: props.group.group_code,
     possible_stops: result.value.possibleStops
@@ -149,12 +88,11 @@ async function saveTrip(){
                 starting_location: sharedSpin.value.startingAddress
             })
             if(error){
-                alert(`Could not save your trip: ${error.message}`)
+                toast.error(`Couldn’t save your trip: ${error.message}`, { action: { label: 'Retry', run: saveTrip } })
                 return
             }
 
             await trackEvent('passport_entry')
-            alert('Your entry has been saved successfully, to view it, please head to the passport page!')
             toast.success('Saved to your passport')
 
                 
@@ -164,17 +102,14 @@ async function saveTrip(){
     }
 
 async function respin2(){
-  let possibleStops = result?.value.possibleStops
+  // after a page refresh there's no local result, so fall back to the options saved for the crew
+  let possibleStops = result.value?.possibleStops
   if (!possibleStops){
     const { data } = await $supabase.from('group_spin_options').select('possible_stops').eq('group_code',props.group.group_code).maybeSingle()
     possibleStops = data?.possible_stops
   }
-  result.value = {...result.value,...reroll(response.data.value,result.value.possibleStops)
-  
-  }
-  if (!possibleStops){
-    ready.value=true
-  }
+  // reroll() throws when there's nothing to pick from, so a failed reroll is never counted
+  result.value = {...result.value, possibleStops, ...reroll(response.data.value, possibleStops)}
   await shareSpin()
   await trackEvent('spin')
 }
@@ -188,12 +123,11 @@ async function spin2(){
     travelTime.value,
     submitted.value
   )
-  if (!result.value.errorMessage) await trackEvent('spin')
-
   if (!result.value) return
 
   await shareSpin()
-  await trackEvent('spin')
+  // spin() reports failures through errorMessage instead of throwing, so only count spins that worked
+  if (!result.value.errorMessage) await trackEvent('spin')
 }
 
 

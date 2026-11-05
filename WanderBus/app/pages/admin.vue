@@ -70,19 +70,12 @@ async function fetchPendingPhotos() {
 
     if (error) throw error
 
-    pendingPhotos.value = await Promise.all(
-      (data ?? []).map(async (photo) => {
-        const { data: signed, error: urlError } =
-          await $supabase.storage
-            .from('place-photos')
-            .createSignedUrl(photo.path, 600)
-
-        return {
-          ...photo,
-          url: urlError ? null : signed.signedUrl
-        }
-      })
-    )
+    // public urls, like the stop page: signed urls need a storage read policy that only covers your own folder,
+    // so an admin couldn't preview anyone else's photo
+    pendingPhotos.value = (data ?? []).map(photo => ({
+      ...photo,
+      url: $supabase.storage.from('place-photos').getPublicUrl(photo.path).data.publicUrl
+    }))
   } catch (error) {
     console.error('Photo loading error:', error)
     alert('Failed to load pending photos.')

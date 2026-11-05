@@ -237,9 +237,11 @@ async function joinGroup() {
     currentGroup.value = group
     alreadyInGroup.value = true
     showLobby.value = true
-  } catch {
-    
-    joinError.value = 'Couldn’t join that crew. Try again.'
+  } catch (e) {
+    console.error('Join crew failed:', e)
+    // 23505 = unique violation: this account already has a seat in that crew
+    if (e?.code === '23505') joinError.value = 'You’re already in that crew. Refresh to open its lobby.'
+    else joinError.value = `Couldn’t join that crew. ${e?.message ?? 'Try again.'}`
   } finally {
     joiningGroup.value = false
   }

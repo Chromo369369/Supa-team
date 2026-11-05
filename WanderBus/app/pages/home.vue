@@ -84,7 +84,7 @@ async function soloSave(){
         current_trip: soloSpin.value
     })
     if (error){
-        alert(`Could not save your spin, ${error}`)
+        toast.error(`Couldn’t save your spin: ${error.message}`)
     }
 }    
 

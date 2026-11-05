@@ -389,7 +389,7 @@
             await deleteActivity(activity)
             toast.success(`${activityStyles[activity.kind].label} deleted.`)
         } catch (e) {
-            toast.error(`Couldn’t delete your ${activity.kind}. ${e.message}`, { action: { label: 'Retry', run: () => deleteNow(activity) } })
+            toast.error(`Couldn’t delete that ${activity.kind}. ${e.message}`, { action: { label: 'Retry', run: () => deleteNow(activity) } })
         }
     }
 

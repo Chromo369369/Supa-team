@@ -152,12 +152,14 @@ function onProofPicked(event) {
                 <input ref="fileInput" type="file" accept="image/*" class="d-none" tabindex="-1" aria-hidden="true" @change="onProofPicked" />
             </template>
 
-            <span v-if="activity.isMine" class="owner-actions">
-                <button type="button" class="btn-wb-ghost btn-sm" :aria-label="`Edit your ${noun}`" @click="emit('edit', activity)">
+            <!-- owners can edit and delete; admins can delete anyone's post -->
+            <span v-if="activity.isMine || isAdmin" class="owner-actions">
+                <button v-if="activity.isMine" type="button" class="btn-wb-ghost btn-sm" :aria-label="`Edit your ${noun}`" @click="emit('edit', activity)">
                     <i class="bi bi-pencil" aria-hidden="true"></i> Edit
                 </button>
-                <button v-if="activity.isMine || isAdmin" type="button" class="btn-wb-ghost btn-sm danger"
-                :aria-label="`Delete ${activity.isMine ? 'your' : 'this'} ${noun}`" @click="emit('delete', activity)"> Delete
+                <button type="button" class="btn-wb-ghost btn-sm danger"
+                :aria-label="`Delete ${activity.isMine ? 'your' : 'this'} ${noun}`" @click="emit('delete', activity)">
+                    <i class="bi bi-trash3" aria-hidden="true"></i> Delete
                 </button>
             </span>
         </footer>

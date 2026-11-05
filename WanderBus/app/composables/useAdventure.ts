@@ -94,11 +94,26 @@ export const useAdventure = () => {
     writeStorage(session.value)
   }
 
+  // the saved solo ticket (home.vue's soloTrip row) ends with the adventure, so ending from any page
+  // frees the user to join a crew and /home opens on a fresh spin instead of the old ticket
+  async function clearSoloTicket() {
+    try {
+      const { data: { user } } = await $supabase.auth.getUser()
+      if (!user) return   // signed out already (end() runs on SIGNED_OUT): nothing we're allowed to delete
+      const { error } = await $supabase.from('soloTrip').delete().eq('user_id', user.id)
+      if (error) console.error('[adventure] could not clear the solo ticket:', error.message)
+    } catch (e: any) {
+      console.error('[adventure] could not clear the solo ticket:', e?.message)
+    }
+  }
+
   function end() {
+    const hadSession = session.value !== null
     endPrompt.value = false
     session.value = null
     writeStorage(null)
     stopTicker()
+    if (hadSession) clearSoloTicket()
     for (const cb of [...endCallbacks]) {
       try { cb() } catch (e) { console.error('[adventure] onEnd callback failed:', e) }
     }

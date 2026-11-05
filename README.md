@@ -198,7 +198,48 @@ After changing any environment variable, redeploy. Changes only apply to new dep
 
 ## Testing
 
-> **TODO (team):** add the E2E test setup here once the tests are merged into `main`: the test framework (e.g. Playwright), how to install the browsers, the command to run the tests, which user journeys are covered, and which test accounts the tests need.
+Tests use [Playwright](https://playwright.dev). The config is `WanderBus/playwright.config.ts` and the tests are in `WanderBus/tests/`.
+
+### Running the tests
+
+Run these from the `WanderBus/` folder:
+
+```bash
+pnpm install                               # includes @playwright/test
+pnpm exec playwright install chromium      # one-time browser download
+pnpm exec playwright test                  # runs everything (starts `pnpm dev` automatically)
+```
+
+Other useful commands:
+
+```bash
+pnpm exec playwright test --project unit       # plain functions only, no browser or server
+pnpm exec playwright test --project api        # the /api server routes
+pnpm exec playwright test --project chromium   # pages in a real browser
+pnpm exec playwright test --ui                 # interactive runner
+pnpm exec playwright show-report               # HTML report from the last run
+```
+
+Before it starts, Playwright launches the dev server (`pnpm dev`), or reuses one that's already running on `http://localhost:3000`. To test somewhere else, set `BASE_URL`. To skip starting a server, set `PW_SKIP_SERVER=1`.
+
+### What the tests need
+
+- **No test accounts and no real database.** The browser tests fake Supabase and the `/api` calls (`tests/helpers/mock.ts`, `tests/fixtures/`), so they never log in for real or write data. That keeps them repeatable.
+- **The `api` tests call LTA and OneMap for real,** so they need the keys in `WanderBus/.env` (see [Running it locally](#running-it-locally)).
+- **3 slow tests are skipped by default.** They call the OpenStreetMap-backed routes, which can take over a minute. Run them with `RUN_SLOW_API=1 pnpm exec playwright test --project api`.
+
+### What's covered
+
+| Project | Files | Covers |
+|---|---|---|
+| `unit` | `tests/unit/` | The spin algorithm: walking-distance starting stops, riding bus routes within the time limit, the mood filter, ticket picking. Also distance maths, category tables, the LED font and user colours. |
+| `api` | `tests/api/` | The LTA routes (bus stops, routes, arrivals), the OneMap search route, and the OpenStreetMap routes (amenities, places near a stop, and a clean 4xx for an unknown stop) |
+| `chromium` | `tests/public/` | The landing page (links, sections, mobile menu, no sideways scroll); the login and register forms (validation, wrong credentials, mismatched or short passwords, success state); page redirects for logged-out and logged-in users; header links and logging out |
+| `chromium` | `tests/app/` | The spin page (location search with mouse and keyboard, mood chips, the time dial, filters kept in the URL, spinning, "Spin again", no stops found, the API failing, the phone layout); that passport, profile, group and stop pages load and behave; that browsing never writes to the database or throws an uncaught error |
+
+The last full run had **136 passed, 0 failed, 3 skipped** (the slow OpenStreetMap tests).
+
+**Not covered yet:** a solo trip from start to finish (tear the ticket, end the adventure, save), the group flow (hosting, joining and spinning together), editing and deleting passport entries, posting signposts and challenges, the shop, and the admin page. We tested these by hand.
 
 ---
 
